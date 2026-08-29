@@ -53,6 +53,23 @@ both applied here:
   updates -- meaningless noise in exactly the ratio PPO's clipping depends
   on. `load_generator` now forces dropout=0 unconditionally for RL.
 
+v4 adds the paper's second stabilizer, diversity-filtered experience replay
+(`--diversity-filter --replay`), which targets a DIFFERENT failure from
+everything above. v1/v2 failed at *global collapse* -- the whole batch
+converging to one or two molecules, unique% at 2% -- and PPO + the adaptive
+KL controller fixed that. v3's remaining problem is not collapse: uniqueness
+is 96% and the sample carries 2938 scaffolds. It is that the *high-reward
+region* is one chemotype (58% of the P>=0.5 set on a single Bemis-Murcko
+scaffold, and far more than that once ring-heteroatom variants are merged),
+so the policy R-group-enumerates instead of scaffold-hopping. No amount of
+trust-region control fixes this, because the objective contains no term that
+distinguishes one scaffold from another -- the reward surface genuinely has
+one dominant hill and PPO only governs the speed of the climb. The filter
+changes the surface (diversity_filter.py); replay keeps earlier, rarer
+chemotypes alive in the update so the policy is not re-paying their
+discovery cost every time the trust region moves (replay_buffer.py). Both
+default off; the CLAUDE.md v3 command line reproduces v3 unchanged.
+
 Objective per rollout:
     tau              = ThresholdShaper's current bar (monotonic)
     shaped_reward    = reward(seq) - tau
@@ -82,6 +99,8 @@ import torch.nn as nn
 sys.path.insert(0, "/workspace/rl_chemistry/src")
 from smiles_utils import canonicalize
 from reward_model import RewardModel
+from diversity_filter import DiversityFilter, scaffold_key
+from replay_buffer import ReplayBuffer, encode
 from rdkit import Chem, RDLogger
 from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Scaffolds import MurckoScaffold
@@ -219,22 +238,55 @@ class ADReference:
             out[i] = sims.max()
         return out
 class ThresholdShaper:
-    """Monotonically non-decreasing reward bar tau. Every `update_every`
-    steps, tau is raised (never lowered) to the P-th percentile of raw
-    reward over the last `window_batches` batches. See module docstring
-    for why this is the actual fix for a mode that "solved" the task and
-    stopped exploring."""
-    def __init__(self, batch, window_batches=20, percentile=70.0, update_every=50, init=0.0):
+    """Reward bar tau, raised every `update_every` steps to the P-th
+    percentile of recent reward. Monotonically non-decreasing when
+    `decay`=0 (v3 behaviour). See module docstring for why this is the
+    actual fix for a mode that "solved" the task and stopped exploring.
+
+    `decay` > 0 lets tau ease back down toward the current percentile when
+    achievement falls, and exists specifically because the diversity filter
+    breaks the assumption monotonicity relies on. Monotonic tau is safe when
+    the reward function is fixed: reward that was once achievable stays
+    achievable, so a bar that only rises still has molecules above it. The
+    filter deliberately destroys the reward of whatever region set the bar in
+    the first place, so a latched tau can end up above *everything* the
+    policy can now reach -- at which point every shaped reward in the batch
+    is negative, advantage variance collapses toward zero, and the run stops
+    learning rather than exploring elsewhere. A slow one-sided decay bounds
+    how far tau can outrun the filtered reward landscape while still
+    ratcheting up whenever the policy genuinely improves.
+    """
+    def __init__(self, batch, window_batches=20, percentile=70.0, update_every=50,
+                 init=0.0, decay=0.0):
         self.buf = collections.deque(maxlen=window_batches * batch)
         self.percentile = percentile
         self.update_every = update_every
+        self.decay = decay
         self.tau = init
     def update(self, step, raw_rewards):
         self.buf.extend(raw_rewards.tolist())
         if step % self.update_every == 0 and len(self.buf) >= self.update_every:
             candidate = float(np.percentile(np.asarray(self.buf), self.percentile))
-            self.tau = max(self.tau, candidate)
+            if candidate >= self.tau or self.decay <= 0:
+                self.tau = max(self.tau, candidate)
+            else:
+                self.tau += self.decay * (candidate - self.tau)
         return self.tau
+def replay_nll(policy, padded, vocab):
+    """Mean per-token NLL of stored sequences under the current policy.
+
+    Per-token rather than per-sequence: see replay_buffer.py's docstring --
+    summed sequence logP is O(-40) against a PPO surrogate of O(0.1-1), so
+    the un-normalised version silently turns the run into supervised training
+    on the buffer.
+    """
+    PAD = vocab["pad"]
+    logits, _ = policy(padded[:, :-1])
+    logp = torch.log_softmax(logits, dim=-1)
+    target = padded[:, 1:]
+    tok_logp = logp.gather(-1, target.unsqueeze(-1)).squeeze(-1)
+    mask = (target != PAD).float()
+    return -(tok_logp * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
 def scaffold_of(smi):
     m = Chem.MolFromSmiles(smi)
     if m is None:
@@ -263,6 +315,26 @@ def main():
     ap.add_argument("--threshold-percentile", type=float, default=70.0)
     ap.add_argument("--threshold-update-every", type=int, default=50)
     ap.add_argument("--threshold-init", type=float, default=0.0)
+    ap.add_argument("--threshold-decay", type=float, default=0.0,
+                    help="0 = monotonic tau (v3). >0 lets tau ease down when the "
+                         "diversity filter suppresses the region that set it.")
+    # ---- diversity filter (component 2a) -- all default OFF so the v3
+    # ---- command line in CLAUDE.md still reproduces v3 exactly.
+    ap.add_argument("--diversity-filter", action="store_true")
+    ap.add_argument("--df-bucket-size", type=int, default=25)
+    ap.add_argument("--df-mode", choices=["generic", "murcko"], default="generic")
+    ap.add_argument("--df-record-threshold", type=float, default=0.5,
+                    help="P(active) a molecule must reach to consume bucket capacity")
+    # ---- experience replay (component 2b)
+    ap.add_argument("--replay", action="store_true")
+    ap.add_argument("--replay-capacity", type=int, default=1000)
+    ap.add_argument("--replay-max-per-scaffold", type=int, default=10)
+    ap.add_argument("--replay-min-reward", type=float, default=0.4,
+                    help="admission bar on RAW reward; scaffold concentration is "
+                         "handled by the per-scaffold cap, not by this")
+    ap.add_argument("--replay-k", type=int, default=24)
+    ap.add_argument("--replay-coef", type=float, default=0.05)
+    ap.add_argument("--replay-start", type=int, default=200)
     ap.add_argument("--log-every", type=int, default=10)
     ap.add_argument("--save-every", type=int, default=200)
     ap.add_argument("--out", type=str, default=f"{CKPT}/rl_baseline")
@@ -276,7 +348,11 @@ def main():
     reward_model = RewardModel(lambda_unc=args.lambda_unc)
     ad_ref = ADReference()
     shaper = ThresholdShaper(args.batch, args.threshold_window_batches, args.threshold_percentile,
-                             args.threshold_update_every, args.threshold_init)
+                             args.threshold_update_every, args.threshold_init, args.threshold_decay)
+    dfilter = DiversityFilter(args.df_bucket_size, args.df_mode,
+                              args.df_record_threshold) if args.diversity_filter else None
+    replay = ReplayBuffer(args.replay_capacity, args.replay_max_per_scaffold,
+                          args.replay_min_reward, args.seed) if args.replay else None
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
     baseline = 0.0
     beta_kl = args.beta_kl
@@ -284,8 +360,16 @@ def main():
     print(f"config: {vars(args)}", flush=True)
     print(f"reward model scheme={reward_model.scheme} threshold={reward_model.threshold} "
           f"lambda_unc={reward_model.lambda_unc} invalid_reward={reward_model.invalid_reward}", flush=True)
+    # Extra columns only appear when the component is enabled, so a v3-style
+    # run's log stays byte-comparable with logs/rl_baseline_v3.log.
+    extra_hdr = ""
+    if dfilter is not None:
+        extra_hdr += f"{'dfmult':>8}{'sat':>5}"
+    if replay is not None:
+        extra_hdr += f"{'buf':>6}{'bscaf':>7}{'rnll':>7}"
     print(f"\n{'step':>6}{'loss':>10}{'reward':>9}{'tau':>7}{'p_act':>8}{'unc':>7}{'kl':>8}{'beta':>7}"
-          f"{'valid%':>8}{'uniq%':>7}{'scaf/uniq':>10}{'>tau%':>7}{'AD%(top)':>9}{'sec':>7}", flush=True)
+          f"{'valid%':>8}{'uniq%':>7}{'scaf/uniq':>10}{'>tau%':>7}{'AD%(top)':>9}"
+          f"{extra_hdr}{'sec':>7}", flush=True)
     t_start = time.time()
     for step in range(1, args.steps + 1):
         t0 = time.time()
@@ -298,8 +382,28 @@ def main():
         valid_mask = np.array([c is not None for c in canon])
         score_in = [c if c else "" for c in canon]
         scores = reward_model.score(score_in)
-        tau = shaper.update(step, scores["reward"])
-        shaped_reward = torch.tensor(scores["reward"] - tau, device=DEV, dtype=torch.float32)
+        raw_reward = scores["reward"]
+        keys = None
+        if dfilter is not None or replay is not None:
+            keys = [scaffold_key(c, args.df_mode) if c else None for c in canon]
+        # ---- Diversity filter, applied BEFORE the shaper so tau tracks what
+        # ---- is achievable *under* the filter rather than the pre-filter
+        # ---- landscape (a tau set by the unfiltered peak is unreachable once
+        # ---- the filter suppresses that peak -- see ThresholdShaper).
+        # ---- Multipliers are read against the bucket state at batch start and
+        # ---- only recorded afterwards, so every molecule in a step is judged
+        # ---- against the same memory and the result is order-independent.
+        eff_reward = raw_reward
+        df_mult_mean = 1.0
+        if dfilter is not None:
+            mult = np.asarray(dfilter.multipliers(keys), dtype=np.float32)
+            eff_reward = np.where(raw_reward > 0, raw_reward * mult, raw_reward).astype(np.float32)
+            dfilter.record(keys, scores["p_active"])
+            df_mult_mean = float(mult.mean())
+        if replay is not None:
+            replay.add(canon, keys, raw_reward)
+        tau = shaper.update(step, eff_reward)
+        shaped_reward = torch.tensor(eff_reward - tau, device=DEV, dtype=torch.float32)
         kl_hat = (old_logp - plogp).detach()
         kl_mean = kl_hat.mean().item()
         if kl_mean > args.target_kl * args.kl_adapt_factor:
@@ -311,13 +415,31 @@ def main():
         advantage = (augmented - baseline).detach()
         # ---- PPO-style clipped update: ppo_epochs gradient steps on this
         # ---- ONE rollout, ratio/clip bounding how far any single step moves.
+        # ---- One scaffold-stratified draw from replay memory, fixed across
+        # ---- this rollout's PPO epochs. Enters as an auxiliary likelihood
+        # ---- term, never through the PPO ratio: a molecule stored thousands
+        # ---- of steps ago has a stale logP_old, which either saturates the
+        # ---- clip or (if recomputed) makes ratio==1 and silently reverts to
+        # ---- the uncapped REINFORCE step that collapsed v1.
+        rpad, rw = None, None
+        if replay is not None and step >= args.replay_start and len(replay):
+            rs, w = replay.sample(args.replay_k)
+            if rs:
+                rpad, keep = encode(rs, vocab, args.max_len, DEV)
+                if rpad is not None:
+                    rw = torch.tensor(w[keep], device=DEV, dtype=torch.float32)
         last_loss = 0.0
+        replay_term = 0.0
         for _ in range(args.ppo_epochs):
             new_logp = policy_logprob(policy, padded, vocab)
             ratio = torch.exp(new_logp - old_logp)
             clipped = torch.clamp(ratio, 1 - args.clip_eps, 1 + args.clip_eps)
             surrogate = torch.min(ratio * advantage, clipped * advantage)
             loss = -surrogate.mean()
+            if rpad is not None:
+                rl = (rw * replay_nll(policy, rpad, vocab)).mean()
+                loss = loss + args.replay_coef * rl
+                replay_term = float(rl.item())
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(policy.parameters(), 5.0)
@@ -344,12 +466,29 @@ def main():
                "valid_pct": float(valid_pct), "unique_pct": float(uniq_pct),
                "scaffold_ratio": float(scaf_ratio), "ad_pct_top_decile": float(ad_pct_top),
                "baseline": baseline}
+        # Raw vs effective reward are logged separately: their gap IS the
+        # filter's bite, and `reward_mean` alone cannot distinguish "the
+        # policy got worse" from "the filter is working as intended".
+        row["reward_raw_mean"] = float(raw_reward.mean())
+        row["reward_eff_mean"] = float(np.mean(eff_reward))
+        if dfilter is not None:
+            row["df_mult_mean"] = df_mult_mean
+            row.update({f"df_{k}": v for k, v in dfilter.stats().items()})
+        if replay is not None:
+            row["replay_nll"] = replay_term
+            row.update({f"replay_{k}": v for k, v in replay.stats().items()})
         history.append(row)
         if step % args.log_every == 0 or step == 1:
+            extra = ""
+            if dfilter is not None:
+                extra += f"{df_mult_mean:>8.3f}{dfilter.stats()['n_saturated']:>5d}"
+            if replay is not None:
+                rs_ = replay.stats()
+                extra += f"{rs_['size']:>6d}{rs_['n_scaffolds']:>7d}{replay_term:>7.3f}"
             print(f"{step:>6}{loss:>10.4f}{row['reward_mean']:>9.3f}{tau:>7.3f}"
                   f"{row['p_active_mean']:>8.3f}{row['uncertainty_mean']:>7.3f}{kl_mean:>8.3f}{beta_kl:>7.3f}"
                   f"{valid_pct:>8.1f}{uniq_pct:>7.1f}{scaf_ratio:>10.3f}{pct_above_tau:>7.1f}"
-                  f"{ad_pct_top:>9.1f}{dt:>7.2f}", flush=True)
+                  f"{ad_pct_top:>9.1f}{extra}{dt:>7.2f}", flush=True)
         if step % args.save_every == 0 or step == args.steps:
             torch.save({"model": policy.state_dict(), "vocab": vocab, "config": cfg,
                         "step": step, "args": vars(args)}, f"{args.out}/policy_step{step}.pt")

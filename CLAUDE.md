@@ -116,6 +116,75 @@ fix: penalize/skip rewarding a molecule whose scaffold is already
 well-represented in the replay buffer, forcing the policy to look
 elsewhere for advantage.
 
+## v4 — diversity-filtered experience replay (CODE WRITTEN, NOT YET RUN)
+
+Implemented 2026-08-29. **No run has happened yet** — the pod was down and
+the RunPod MCP was not connected, so every number below is still a
+prediction, not a result. Nothing in this section is validated.
+
+- `src/diversity_filter.py` — per-scaffold occupancy memory. Reward
+  multiplier `clamp(1 - count[key]/bucket_size, 0, 1)`, applied to the
+  positive part of reward only.
+- `src/replay_buffer.py` — scaffold-capped memory of high-reward molecules
+  plus a char-level `encode()` (inverse of the sampler's decode).
+- `src/train_rl.py` — both wired in behind `--diversity-filter` / `--replay`,
+  **default off**, so the v3 command above still reproduces v3 exactly.
+- `src/analyze_scaffolds.py` — now also reports generic-framework counts.
+
+Three design calls that are the substance of the component:
+
+1. **The filter keys on the generic framework, not the Murcko scaffold.**
+   v3's top three "distinct" scaffolds are phenyl / 2-pyridyl / 3-pyridyl
+   on one core. A Murcko-keyed filter is evadable by moving one ring
+   nitrogen, and would make the headline metric improve while nothing
+   chemically changed. `MakeScaffoldGeneric` merges them.
+   **This also means v3's "33 scaffolds / 58% top share" is not the real
+   baseline** — the generic-framework numbers for v3 have to be recomputed
+   before any comparison, and they will look considerably worse.
+2. **Filtered reward decays to 0.0, not to a floor.** Reward here is
+   deliberately unclipped (prior samples sit near -0.17, invalid at -1.0),
+   so REINVENT's score->0 convention would *promote* a filtered molecule
+   above ordinary chemistry.
+3. **Replay is an auxiliary per-token likelihood term, not extra PPO data.**
+   Stale `logP_old` breaks the importance ratio; recomputing it makes
+   ratio==1 and silently reverts to the uncapped REINFORCE step that
+   collapsed v1.
+
+### Known risks — what to watch when it does run
+- **tau latch (most likely failure).** ThresholdShaper's tau is monotonic,
+  which is only safe when the reward function is fixed. The filter
+  deliberately destroys the reward of the region that set tau, so tau can
+  end up above everything reachable: every shaped reward goes negative,
+  advantage variance collapses, and the run stops learning instead of
+  exploring. `--threshold-decay` (default 0 = v3 behaviour) exists for
+  this; **v4 runs should set it**. Watch `tau` vs `reward_eff_mean`.
+- **Replay is itself a collapse driver** — maximum-likelihood on a fixed
+  molecule set, with no clipping and no trust region of its own. Bounded by
+  a small `--replay-coef`, the per-scaffold cap, and scaffold-stratified
+  sampling. Watch `unique_pct` and `beta_kl`.
+- **Filter too aggressive** — a small `--df-bucket-size` can push the policy
+  off the reward manifold entirely back toward the prior. Watch
+  `pct_p_ge_0.5` collapsing toward the prior's 0.04%.
+- `reward_mean` alone can no longer distinguish "policy got worse" from
+  "filter working as designed" — `reward_raw_mean` and `reward_eff_mean`
+  are both logged for this reason.
+
+### Ablation matrix (all vs. v3, 5000 steps each)
+| run | flags |
+|---|---|
+| v3 (baseline, re-eval on framework key) | *(none)* |
+| v4a filter only | `--diversity-filter --threshold-decay 0.1` |
+| v4b replay only | `--replay` |
+| v4c both | `--diversity-filter --replay --threshold-decay 0.1` |
+
+    nohup python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
+      --beta-kl 0.02 --target-kl 3.0 --ppo-epochs 4 --clip-eps 0.2 \
+      --lambda-unc 1.0 --threshold-update-every 50 \
+      --diversity-filter --df-bucket-size 25 --df-mode generic \
+      --replay --replay-coef 0.05 --replay-k 24 \
+      --threshold-decay 0.1 \
+      --out checkpoints/rl_v4c > logs/rl_v4c.log 2>&1 &
+
 ## How to run / reproduce
     # training (detached; ~39 min for 5000 steps on the 4090)
     nohup python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
@@ -130,18 +199,31 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 `<out>/history.json`, eval summary in `<out>/eval.json`.
 
 ## Not started
-- **Experience replay with a diversity filter** — next component, and the
-  direct fix for the narrow high-reward tail (28 scaffolds among P>=0.5).
+- **Running** any of the v4 code above — it is written but has never
+  executed, not even an import check (no Python on the local mirror
+  machine, pod down).
 - Transfer learning on own high-reward outputs (3rd paper component).
+  Note this overlaps the replay term: replay is a likelihood term on
+  remembered high-reward molecules inside the RL update, whereas the
+  paper's component 1 is a separate periodic fine-tuning phase.
 - Ablations of each component against the v3 baseline.
 - Final candidate generation + write-up.
 
 ## Next step
-Implement diversity-filtered experience replay on top of v3, then ablate.
-Baseline to beat is `results/rl_baseline_v3/scaffolds.json`: **33 unique
-scaffolds among P(active)>=0.5, with the top scaffold covering 58%** of
-that set. Success = more scaffolds AND a lower top-scaffold share, while
-holding valid% (99.6), novelty (98%) and the AD metrics where v3 has them.
+Bring a pod up, then in order:
+1. **Smoke-test the v4 code** — it has never been executed. `--steps 20
+   --diversity-filter --replay --replay-start 5` is enough to catch import
+   errors, the `encode()` round-trip, and shape bugs in the replay term.
+2. **Re-evaluate v3 on the generic-framework key** to get the real baseline.
+   `results/rl_baseline_v3/scaffolds.json` records 33 Murcko scaffolds /
+   58% top share, but Murcko splits ring-heteroatom variants of one core,
+   so the true chemotype count is lower and the true top share higher.
+   Comparing v4 frameworks against v3 Murcko would be measuring the metric
+   change, not the model change.
+3. Run the v4a/v4b/v4c ablations and compare against that corrected
+   baseline. Success = more generic frameworks AND a lower top-framework
+   share, while holding valid% (99.6), novelty (98%), `pct_p_ge_0.5` (5.7%)
+   and the AD metrics where v3 has them.
 
 ## Local mirror for review
 The pod is the source of truth for data/weights, but all code + metrics are
