@@ -116,11 +116,86 @@ fix: penalize/skip rewarding a molecule whose scaffold is already
 well-represented in the replay buffer, forcing the policy to look
 elsewhere for advantage.
 
-## v4 — diversity-filtered experience replay (CODE WRITTEN, NOT YET RUN)
+## v4 — diversity-filtered experience replay (RUN + ABLATED 2026-08-29)
 
-Implemented 2026-08-29. **No run has happened yet** — the pod was down and
-the RunPod MCP was not connected, so every number below is still a
-prediction, not a result. Nothing in this section is validated.
+Implemented and ablated 2026-08-29 on pod `rl-chemistry-v4`, 3x5000 steps,
+~1.1 h wall clock (three runs concurrent; RDKit scoring is the bottleneck,
+GPU sat at 9%).
+
+### The baseline was wrong, and had to be recomputed first
+`results/rl_baseline_v3/scaffolds.json` reports 33 Murcko scaffolds / 58%
+top share. On the **generic-framework** key that the filter actually buckets
+on, v3 is **19 frameworks with the top one covering 77%** — Murcko was
+splitting phenyl/2-pyridyl/3-pyridyl variants of one core (67+10+8 = 85 of
+117 molecules) into three "distinct scaffolds". Recomputed baseline is in
+`results/rl_baseline_v3/scaffolds_framework.json`. Comparing v4 frameworks
+against v3 Murcko would have measured the metric change, not the model.
+
+### Results (n=5000, P(active)>=0.5 set; prior column for scale)
+| metric | prior | v3 | v4a filter | v4b replay | v4c both |
+|---|---|---|---|---|---|
+| unique high-reward molecules | - | 117 | **411** | 5 | 187 |
+| Murcko scaffolds | - | 32 | 359 | 4 | 161 |
+| **generic frameworks** | - | **19** | **231** | 3 | **138** |
+| **top framework share** | - | **77%** | **4%** | 40% | **7%** |
+| novel (of high-reward) | - | 98% | 97% | 40% | 92% |
+| P(active)>=0.5 | 0.10% | 5.7% | **11.4%** | 0.12% | 3.8% |
+| P(active)>=0.8 | 0.02% | 3.8% | **8.9%** | 0.00% | 1.8% |
+| valid% | 97.9 | 99.6 | 99.7 | 99.7 | 99.5 |
+| unique% | 100 | 96.0 | 93.3 | 99.3 | **99.1** |
+| overall scaffolds | 4321 | 2938 | 2753 | 2890 | **3073** |
+| mean RF uncertainty | 0.283 | 0.223 | 0.199 | 0.237 | 0.224 |
+| **AD: top-decile within 0.3** | 83.0 | **94.4** | **45.2** | 93.4 | **94.4** |
+
+### Read this before quoting the v4a numbers
+**v4a's diversity and potency gains are partly extrapolation.** Its
+applicability-domain coverage halved (94.4% -> 45.2%); the high-reward set's
+mean max-Tanimoto to train fell 0.459 -> 0.330 with a minimum of 0.252,
+i.e. below the AD radius entirely. The RF-uncertainty penalty did **not**
+catch it — uncertainty went *down* (0.199). That is a known random-forest
+behaviour: tree agreement can stay high in regions the forest never saw, so
+low ensemble variance is not evidence of validity out of domain. Half of
+v4a's "better" molecules sit where the reward model has no standing to judge.
+
+**v4c is the defensible result.** 7.3x more frameworks (19 -> 138), top-share
+77% -> 7%, while holding AD coverage at *exactly* v3's 94.4%, uncertainty at
+v3's level (0.224 vs 0.223), improving overall scaffold count (3073 vs 2938)
+and uniqueness (99.1% vs 96.0%). The cost is potency: P>=0.5 falls 5.7% ->
+3.8%. That is the honest trade — ~34% of the hit rate for 7.3x the chemotype
+diversity, all of it inside the domain where the RF is trustworthy.
+
+### Why replay alone (v4b) destroyed the run — the tau latch, confirmed
+v4b was the only run without `--threshold-decay`, i.e. with v3's monotonic
+tau, and it is the predicted failure exactly:
+- A reward spike near step 1300 (unique% dipped to 64%) ratcheted tau up;
+  it reached **0.953 at step 2950 and could never come down**.
+- `pct_above_tau` was **0.0% for the entire last 1000 steps** — no molecule
+  could clear the bar, so advantage variance collapsed and the run stopped
+  learning. It did not look like collapse; the policy stayed 99% unique.
+- Meanwhile the replay likelihood term ran unopposed: `beta_kl` pinned at
+  its 20.0 ceiling for **798 steps** (v3: 14), losses swung -236 to +303,
+  valid% crashed to 53%.
+- Final: **P>=0.5 = 0.12% against the pretrained prior's own 0.10%**, and
+  mean p_active 0.068 *below* the prior's 0.098. Worse than no RL at all.
+- Replay barely functioned alone: 598 molecules admitted of 625,269 offered
+  (0.1%), buffer 524 molecules over 262 scaffolds. In v4c the same buffer
+  holds 1000 molecules over **1000 distinct scaffolds**, one per scaffold.
+
+### The mechanism worth remembering
+Replay alone is destructive; the filter alone drifts out of domain; together
+they are complementary. The filter *pushes* the policy off the mined
+chemotype, and the scaffold-stratified buffer *anchors* it to molecules
+actually observed to score well — which is what keeps v4c inside the
+applicability domain (94.4%) while v4a, with the same push and no anchor,
+falls to 45.2%. The buffer is not mainly a sample-efficiency device here;
+it is the thing that stops the diversity filter from wandering into
+chemistry the reward model cannot evaluate.
+
+Stability note: the filter *improved* optimisation stability rather than
+harming it. v4a/v4c minimum unique% was 56.7% vs v3's 21.3%, minimum valid%
+93.8/91.4 vs 82.0, and neither hit the beta_kl ceiling once (v3: 14 steps).
+Removing the single dominant reward hill removed the pressure that was
+driving v3 toward collapse.
 
 - `src/diversity_filter.py` — per-scaffold occupancy memory. Reward
   multiplier `clamp(1 - count[key]/bucket_size, 0, 1)`, applied to the
@@ -131,7 +206,8 @@ prediction, not a result. Nothing in this section is validated.
   **default off**, so the v3 command above still reproduces v3 exactly.
 - `src/analyze_scaffolds.py` — now also reports generic-framework counts.
 
-Three design calls that are the substance of the component:
+Three design calls that are the substance of the component (all three were
+load-bearing in the results above):
 
 1. **The filter keys on the generic framework, not the Murcko scaffold.**
    v3's top three "distinct" scaffolds are phenyl / 2-pyridyl / 3-pyridyl
@@ -150,31 +226,26 @@ Three design calls that are the substance of the component:
    ratio==1 and silently reverts to the uncapped REINFORCE step that
    collapsed v1.
 
-### Known risks — what to watch when it does run
-- **tau latch (most likely failure).** ThresholdShaper's tau is monotonic,
-  which is only safe when the reward function is fixed. The filter
-  deliberately destroys the reward of the region that set tau, so tau can
-  end up above everything reachable: every shaped reward goes negative,
-  advantage variance collapses, and the run stops learning instead of
-  exploring. `--threshold-decay` (default 0 = v3 behaviour) exists for
-  this; **v4 runs should set it**. Watch `tau` vs `reward_eff_mean`.
-- **Replay is itself a collapse driver** — maximum-likelihood on a fixed
-  molecule set, with no clipping and no trust region of its own. Bounded by
-  a small `--replay-coef`, the per-scaffold cap, and scaffold-stratified
-  sampling. Watch `unique_pct` and `beta_kl`.
-- **Filter too aggressive** — a small `--df-bucket-size` can push the policy
-  off the reward manifold entirely back toward the prior. Watch
-  `pct_p_ge_0.5` collapsing toward the prior's 0.04%.
-- `reward_mean` alone can no longer distinguish "policy got worse" from
-  "filter working as designed" — `reward_raw_mean` and `reward_eff_mean`
-  are both logged for this reason.
+### Risks predicted before the run — outcome
+- **tau latch** — predicted as most likely failure. **Happened, in v4b,
+  the one run without `--threshold-decay`.** Always set it when the filter
+  or replay is on. Watch `tau` vs `reward_eff_mean` and `pct_above_tau`.
+- **Replay as a collapse driver** — confirmed. Alone it pinned beta_kl at
+  the ceiling for 798 steps and crashed valid% to 53%. Safe only alongside
+  the filter, which keeps the buffer scaffold-diverse.
+- **Filter too aggressive** — did *not* happen at `--df-bucket-size 25`;
+  potency went up (v4a) or fell modestly (v4c). The real cost showed up
+  somewhere unpredicted: **applicability domain, not potency** (v4a).
+- `reward_raw_mean` vs `reward_eff_mean` logging was necessary — the gap
+  between them is the only way to tell the filter working from the policy
+  degrading.
 
-### Ablation matrix (all vs. v3, 5000 steps each)
+### Ablation matrix (all vs. v3, 5000 steps each) — as run
 | run | flags |
 |---|---|
 | v3 (baseline, re-eval on framework key) | *(none)* |
 | v4a filter only | `--diversity-filter --threshold-decay 0.1` |
-| v4b replay only | `--replay` |
+| v4b replay only | `--replay` *(no decay — this is why it failed)* |
 | v4c both | `--diversity-filter --replay --threshold-decay 0.1` |
 
     nohup python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
@@ -199,9 +270,14 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 `<out>/history.json`, eval summary in `<out>/eval.json`.
 
 ## Not started
-- **Running** any of the v4 code above — it is written but has never
-  executed, not even an import check (no Python on the local mirror
-  machine, pod down).
+- **A v4b re-run with `--threshold-decay 0.1`** — v4b's failure is confounded:
+  it tested "replay alone" AND "monotonic tau" at once, so it does not
+  cleanly isolate replay's contribution. Rerunning it with decay on is the
+  one ablation still owed.
+- **Deciding v4a vs v4c**, i.e. whether the AD collapse is acceptable. If
+  extrapolation is the concern, the fix is a real AD term in the reward
+  rather than relying on RF ensemble variance, which demonstrably fails
+  out of domain.
 - Transfer learning on own high-reward outputs (3rd paper component).
   Note this overlaps the replay term: replay is a likelihood term on
   remembered high-reward molecules inside the RL update, whereas the
@@ -210,20 +286,19 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 - Final candidate generation + write-up.
 
 ## Next step
-Bring a pod up, then in order:
-1. **Smoke-test the v4 code** — it has never been executed. `--steps 20
-   --diversity-filter --replay --replay-start 5` is enough to catch import
-   errors, the `encode()` round-trip, and shape bugs in the replay term.
-2. **Re-evaluate v3 on the generic-framework key** to get the real baseline.
-   `results/rl_baseline_v3/scaffolds.json` records 33 Murcko scaffolds /
-   58% top share, but Murcko splits ring-heteroatom variants of one core,
-   so the true chemotype count is lower and the true top share higher.
-   Comparing v4 frameworks against v3 Murcko would be measuring the metric
-   change, not the model change.
-3. Run the v4a/v4b/v4c ablations and compare against that corrected
-   baseline. Success = more generic frameworks AND a lower top-framework
-   share, while holding valid% (99.6), novelty (98%), `pct_p_ge_0.5` (5.7%)
-   and the AD metrics where v3 has them.
+The success criterion set before the run was: more generic frameworks AND a
+lower top-framework share, while holding valid%, novelty, `pct_p_ge_0.5`
+and the AD metrics. **v4c meets it on every axis except `pct_p_ge_0.5`**
+(3.8% vs 5.7%); v4a beats it on potency and diversity but fails the AD
+criterion badly (45.2% vs 94.4%). So:
+1. Re-run v4b with `--threshold-decay 0.1` to disentangle "replay alone"
+   from "monotonic tau" — currently confounded.
+2. Decide the v4a/v4c trade (potency+diversity vs domain validity). If v4a's
+   chemistry is wanted, first replace the RF-variance uncertainty penalty
+   with an explicit AD term — ensemble variance provably did not detect
+   the out-of-domain drift here.
+3. Then: transfer learning on own high-reward outputs, and final candidate
+   generation from whichever policy is chosen.
 
 ## Local mirror for review
 The pod is the source of truth for data/weights, but all code + metrics are
