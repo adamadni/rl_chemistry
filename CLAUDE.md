@@ -447,6 +447,63 @@ cand3/4/5 scatter 0.51-0.62, i.e. the search finds materially different best
 poses for them run to run. One ligand in the set spread **3.40 kcal/mol**.
 Single-seed docking should not be trusted on this target.
 
+### Pose validation — `src/interaction_fingerprint.py`, `results/docking/ifp_*.json`
+A score is only worth as much as the pose it is attached to. Poses were checked
+against ABL1's known pharmacophore: hinge Met318, gatekeeper Thr315,
+alphaC Glu286, DFG Asp381, catalytic Lys271. (Polar contacts are heavy-atom
+distance only, no angle criterion, so the test is reliable for ABSENCE —
+"never approaches the hinge" — and only suggestive for presence.)
+
+    1IEP (DFG-out)   resid  Met318   Thr315   Glu286   Asp381
+    nilotinib           25  backbone sidechain sidechain backbone   <- type II
+    imatinib            24  backbone sidechain sidechain backbone   <- type II
+    dasatinib           18  -        sidechain sidechain backbone   <- NO HINGE
+    cand5               25  backbone contact   sidechain backbone
+    cand4               24  backbone contact   sidechain backbone
+    cand3               23  backbone contact   contact   contact
+    cand1               22  contact  contact   sidechain backbone
+    cand2               14  -        -         -         contact    <- FAILS
+
+    2GQG (DFG-in)    resid  Met318   Thr315
+    dasatinib           21  backbone sidechain                      <- type I, correct
+    nilotinib           15  backbone contact                        <- loses back pocket
+
+**The protocol reproduces known biology.** Imatinib and nilotinib show the
+canonical type-II signature on both DFG-out structures — hinge backbone H-bond,
+gatekeeper, alphaC-Glu, DFG-Asp. Dasatinib shows type-I hinge binding on its own
+DFG-in structure and *loses the hinge contact entirely* on DFG-out. Nilotinib
+loses the back-pocket contacts on DFG-in. Both drugs behave exactly as their
+binding class predicts, which is the strongest available evidence that the
+pipeline is working rather than producing plausible-looking noise.
+
+**This explains dasatinib's 15th percentile, and exposes a scoring-scheme bug.**
+Dasatinib is a type-I binder; best-over-ensemble scoring rewards whichever
+receptor yields the most contacts, and DFG-out structures give larger, more
+enclosed pockets that flatter type-II-shaped ligands. So best-of-ensemble
+systematically under-serves type-I binders. **Ligands should be scored in the
+conformation their interaction fingerprint says they actually use, not by a
+blind maximum over receptors.**
+
+**Candidate verdicts (this supersedes the earlier "cand3/cand4" shortlist):**
+- **cand5, cand4** — reproduce the full imatinib/nilotinib type-II signature on
+  DFG-out (hinge backbone H-bond + gatekeeper + Glu286 + Asp381 backbone).
+  Best-supported of the five, and their scores rest on chemically sensible poses.
+- **cand3** — consistent hinge H-bond across all three crystals, weaker
+  back-pocket engagement.
+- **cand1** — RF's most confident molecule (P=1.000) but only a non-polar
+  approach to the hinge on 1IEP. Not supported.
+- **cand2** — RF P=0.985, yet 13-14 residues contacted and NO hinge, gatekeeper
+  or Glu286 contact on either DFG-out receptor. Docking score (5th percentile)
+  and pose agree it is not credible. **First clean agreement between the two
+  methods, and it is a rejection.**
+
+### Candidate SMILES (`results/candidates_v5d.json`)
+    cand1  Cc1cc(NC(=O)C2CC2)ncc1-c1ccc2cc(NC(=O)C3CC3)ncc2c1
+    cand2  Cc1ccc(-c2cc(C(=O)Nc3ccc(OC(F)(F)Cl)cc3)cnc2N2CCNCC2)cc1
+    cand3  Cc1ccc(F)cc1-c1ccc2cc(NC(=O)CC3CNCCN3C3COC3)ncc2c1
+    cand4  CNC(=O)NC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1
+    cand5  Cc1ccc(CC(=O)N2CCN(CC(N)=O)CC2)cc1-c1ccc2cc(NC(=O)C3CC3(C)C)ncc2c1
+
 ### Single-seed table (superseded, kept for the record) — `results/docking/final_table.json`
 All ligands docked in one run under an identical protocol, so imatinib is a
 like-for-like anchor rather than a literature value. Score = best over the

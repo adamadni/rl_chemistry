@@ -1,0 +1,161 @@
+[
+ {
+  "ligand": "nilotinib",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 20,
+  "polar_residues": [
+   318
+  ],
+  "key": {
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Thr315",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "imatinib",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 21,
+  "polar_residues": [
+   248,
+   381
+  ],
+  "key": {
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Met318"
+  ]
+ },
+ {
+  "ligand": "dasatinib",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 21,
+  "polar_residues": [
+   250,
+   251,
+   315,
+   318
+  ],
+  "key": {
+   "Thr315": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand1",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 13,
+  "polar_residues": [
+   319,
+   321,
+   367,
+   368
+  ],
+  "key": {},
+  "key_contact_only": [
+   "Met318",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand2",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 19,
+  "polar_residues": [
+   315
+  ],
+  "key": {
+   "Thr315": [
+    "sidechain"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Met318",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand3",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 17,
+  "polar_residues": [
+   367,
+   368
+  ],
+  "key": {},
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand4",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 16,
+  "polar_residues": [
+   363,
+   381
+  ],
+  "key": {
+   "Asp381": [
+    "sidechain"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Met318"
+  ]
+ },
+ {
+  "ligand": "cand5",
+  "receptor": "AF",
+  "seed": 42,
+  "n_residues_contacted": 17,
+  "polar_residues": [
+   322,
+   367,
+   381
+  ],
+  "key": {
+   "Asp381": [
+    "sidechain"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Thr315",
+   "Met318"
+  ]
+ }
+]
