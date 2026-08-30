@@ -1,0 +1,170 @@
+{
+ "benchmark_actives": {
+  "mean": -11.2845,
+  "median": -11.379999999999999,
+  "min": -13.18,
+  "max": -8.82,
+  "n": 40
+ },
+ "benchmark_inactives": {
+  "mean": -9.91575,
+  "median": -9.855,
+  "min": -12.6,
+  "max": -5.77,
+  "n": 40
+ },
+ "rows": [
+  {
+   "name": "imatinib",
+   "class": "reference_drug",
+   "affinity_best_crystal": -12.79,
+   "cnn_affinity_best": 8.435,
+   "affinity_AF": -8.03,
+   "per_receptor": {
+    "1IEP": -12.79,
+    "3CS9": -12.1,
+    "2GQG": -9.52,
+    "AF": -8.03
+   },
+   "pct_vs_actives_affinity": 92.5,
+   "pct_vs_actives_cnnaff": 85.0,
+   "af_penalty": 4.76,
+   "rf_p_active": null,
+   "mw": null,
+   "max_tanimoto_train": null
+  },
+  {
+   "name": "dasatinib",
+   "class": "reference_drug",
+   "affinity_best_crystal": -10.32,
+   "cnn_affinity_best": 8.071,
+   "affinity_AF": -9.33,
+   "per_receptor": {
+    "1IEP": -9.74,
+    "3CS9": -10.32,
+    "2GQG": -9.95,
+    "AF": -9.33
+   },
+   "pct_vs_actives_affinity": 12.5,
+   "pct_vs_actives_cnnaff": 57.49999999999999,
+   "af_penalty": 0.9900000000000002,
+   "rf_p_active": null,
+   "mw": null,
+   "max_tanimoto_train": null
+  },
+  {
+   "name": "nilotinib",
+   "class": "reference_drug",
+   "affinity_best_crystal": -13.62,
+   "cnn_affinity_best": 8.869,
+   "affinity_AF": -9.35,
+   "per_receptor": {
+    "1IEP": -13.55,
+    "3CS9": -13.62,
+    "2GQG": -9.05,
+    "AF": -9.35
+   },
+   "pct_vs_actives_affinity": 100.0,
+   "pct_vs_actives_cnnaff": 100.0,
+   "af_penalty": 4.27,
+   "rf_p_active": null,
+   "mw": null,
+   "max_tanimoto_train": null
+  },
+  {
+   "name": "cand1",
+   "class": "generated_candidate",
+   "affinity_best_crystal": -10.51,
+   "cnn_affinity_best": 7.826,
+   "affinity_AF": -7.89,
+   "per_receptor": {
+    "1IEP": -8.9,
+    "3CS9": -10.51,
+    "2GQG": -9.3,
+    "AF": -7.89
+   },
+   "pct_vs_actives_affinity": 22.5,
+   "pct_vs_actives_cnnaff": 45.0,
+   "af_penalty": 2.62,
+   "rf_p_active": 1.0,
+   "mw": 386.45500000000015,
+   "max_tanimoto_train": 0.46268656849861145
+  },
+  {
+   "name": "cand2",
+   "class": "generated_candidate",
+   "affinity_best_crystal": -9.3,
+   "cnn_affinity_best": 7.214,
+   "affinity_AF": -3.66,
+   "per_receptor": {
+    "1IEP": -0.87,
+    "3CS9": -7.13,
+    "2GQG": -9.3,
+    "AF": -3.66
+   },
+   "pct_vs_actives_affinity": 2.5,
+   "pct_vs_actives_cnnaff": 5.0,
+   "af_penalty": 5.640000000000001,
+   "rf_p_active": 0.9848393201828003,
+   "mw": 472.9230000000002,
+   "max_tanimoto_train": 0.3510638177394867
+  },
+  {
+   "name": "cand3",
+   "class": "generated_candidate",
+   "affinity_best_crystal": -12.1,
+   "cnn_affinity_best": 7.765,
+   "affinity_AF": -8.62,
+   "per_receptor": {
+    "1IEP": -12.1,
+    "3CS9": -11.62,
+    "2GQG": -10.92,
+    "AF": -8.62
+   },
+   "pct_vs_actives_affinity": 80.0,
+   "pct_vs_actives_cnnaff": 42.5,
+   "af_penalty": 3.4800000000000004,
+   "rf_p_active": 0.8633890748023987,
+   "mw": 434.51500000000027,
+   "max_tanimoto_train": 0.32608696818351746
+  },
+  {
+   "name": "cand4",
+   "class": "generated_candidate",
+   "affinity_best_crystal": -11.39,
+   "cnn_affinity_best": 8.264,
+   "affinity_AF": -7.77,
+   "per_receptor": {
+    "1IEP": -10.54,
+    "3CS9": -11.39,
+    "2GQG": -10.22,
+    "AF": -7.77
+   },
+   "pct_vs_actives_affinity": 50.0,
+   "pct_vs_actives_cnnaff": 77.5,
+   "af_penalty": 3.620000000000001,
+   "rf_p_active": 0.8180000185966492,
+   "mw": 429.5050000000001,
+   "max_tanimoto_train": 0.44999998807907104
+  },
+  {
+   "name": "cand5",
+   "class": "generated_candidate",
+   "affinity_best_crystal": -12.97,
+   "cnn_affinity_best": 8.427,
+   "affinity_AF": -10.59,
+   "per_receptor": {
+    "1IEP": -12.3,
+    "3CS9": -12.97,
+    "2GQG": -10.16,
+    "AF": -10.59
+   },
+   "pct_vs_actives_affinity": 95.0,
+   "pct_vs_actives_cnnaff": 85.0,
+   "af_penalty": 2.380000000000001,
+   "rf_p_active": 0.8140000104904175,
+   "mw": 513.6420000000003,
+   "max_tanimoto_train": 0.35164836049079895
+  }
+ ]
+}

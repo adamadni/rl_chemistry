@@ -409,35 +409,85 @@ Three conclusions:
    first control, i.e. worse than random, with actives and inactives separated
    by 0.07 kcal/mol.
 
-### Search reliability — the reason candidate numbers are not final
-At exhaustiveness 8, gnina returned **positive affinities** (+16.1, +129.8) for
-one candidate, and imatinib scored -4.42 against 1IEP, its own crystal
-structure, versus -10.00 from smina at exhaustiveness 16. QC on the benchmark
-found only 2/160 affected (1 active, 1 inactive, so the AUC above stands), but
-exhaustiveness 8 is not reliable for large flexible ligands. A rerun of all 88
-ligands at exhaustiveness 16 across four receptors was **killed ~15% in when
-the RunPod account ran out of funds** (see below). Candidate percentiles from
-the exhaustiveness-8 pass are therefore NOT reported as final.
+### FINAL RESULT — candidates vs imatinib (exhaustiveness 16, `results/docking/final_table.json`)
+All ligands docked in one run under an identical protocol, so imatinib is a
+like-for-like anchor rather than a literature value. Score = best over the
+three crystals; percentile is against the 40 known actives docked alongside.
 
-### !! Compute stopped: account out of funds (2026-08-30)
-`pod create` returns "Your account balance is too low to rent a pod." RunPod
-terminated the running pod mid-run. Nothing was lost that is not recoverable,
-BUT:
-- **The final model weights `checkpoints/rl_v5d/policy_latest.pt` exist ONLY
-  on network volume `e4akonl0eu`**, along with the ChEMBL corpus, the QSAR RF,
-  the venv, and every RL checkpoint. Code and metrics are mirrored to git;
-  weights and data deliberately are not.
-- The volume persists but continues to bill (~$0.14/day for 60 GB) and is at
-  risk if the account stays unfunded. **Add funds before anything else.**
-- `docking/bench_*.json`, `docking/cand_*.json` and `docking/all16_*.log` were
-  never pulled to the mirror and are currently unreachable. The numbers above
-  are transcribed from the analysis output.
+    benchmark, same protocol:  40 known actives   mean -11.28  [-13.18, -8.82]
+                               40 matched inactives mean -9.92  [-12.60, -5.77]
+
+    molecule    source          dock   %ile vs actives  CNNaff     AF   AFpen   RF P
+    nilotinib   marketed drug  -13.62       100%         8.869   -9.35  +4.27    -
+    cand5       RL v5d         -12.97        95%         8.427  -10.59  +2.38   0.814
+    imatinib    marketed drug  -12.79        92%         8.435   -8.03  +4.76    -
+    cand3       RL v5d         -12.10        80%         7.765   -8.62  +3.48   0.863
+    cand4       RL v5d         -11.39        50%         8.264   -7.77  +3.62   0.818
+    cand1       RL v5d         -10.51        22%         7.826   -7.89  +2.62   1.000
+    dasatinib   marketed drug  -10.32        12%         8.071   -9.33  +0.99    -
+    cand2       RL v5d          -9.30         2%         7.214   -3.66  +5.64   0.985
+
+- **The candidate set scores at the known-actives mean**: candidates mean
+  -11.25 vs actives -11.28 vs matched inactives -9.92. As a distribution they
+  land with the drugs, not the non-binders. That is the defensible claim.
+- **One candidate (cand5, -12.97) outscores imatinib (-12.79)**; two of five
+  sit above the 80th percentile of known actives. Do NOT read this as "cand5
+  is more potent than imatinib" — see the caveat below.
+- **dasatinib scores 12th percentile.** A marketed, sub-nanomolar ABL1 drug
+  lands near the bottom. This is the protocol's error bar made visible, and
+  the single best argument against over-reading any individual number.
+
+### The RF and docking disagree, and that is the point of the exercise
+Ranked by RF confidence the candidates are cand1 > cand2 > cand3 > cand4 >
+cand5; ranked by docking they are cand5 > cand3 > cand4 > cand1 > cand2 —
+close to exactly inverted. The RF's two most confident molecules
+(P=1.000, 0.985) dock at the 22nd and 2nd percentile; its least confident
+(P=0.814) docks at the 95th.
+
+Neither model is thereby proven wrong: the RF is the stronger classifier on
+its own benchmark (scaffold-split ROC-AUC 0.900 vs docking's 0.799), but it
+judges 2D fingerprint similarity to known ABL1 chemistry, while docking judges
+3D shape/chemical complementarity to a specific receptor conformation. They
+fail differently, which is exactly why an orthogonal check was worth running.
+The honest summary is that **no molecule here is corroborated by both methods
+simultaneously**, and the candidates worth prioritising experimentally are the
+ones that are at least not contradicted — cand3 and cand4, which sit mid-to-
+high on both.
+
+### Enrichment at exhaustiveness 16 (supersedes the exh-8 numbers)
+    affinity @ 3CS9      0.799  [0.686, 0.903]   EF10% 1.50
+    affinity @ ensemble  0.790  [0.680, 0.889]   EF10% 1.50
+    affinity @ 2GQG      0.779  [0.667, 0.877]   EF10% 1.75
+    affinity @ 1IEP      0.755  [0.641, 0.863]   EF10% 1.50
+    cnn_score @ ensemble 0.778  [0.665, 0.883]
+    cnn_affinity @ 2GQG  0.754  [0.640, 0.857]
+CNN rescoring again failed to beat plain Vina scoring (0.778 vs 0.790).
+
+### Search reliability — resolved, and why it mattered
+At exhaustiveness 8, gnina returned **positive affinities** (+16.1, +129.8) for
+one candidate, and imatinib scored **-4.42** against 1IEP, its own crystal
+structure. At exhaustiveness 16 the same molecule scores **-12.79**. That is a
+pure search failure, not chemistry, and it is why no candidate number from the
+exhaustiveness-8 pass was ever reported. QC found only 2/160 benchmark runs
+affected (1 active, 1 inactive), so the exh-8 AUC was not corrupted, but
+exhaustiveness 8 is not usable for large flexible ligands on this target.
+**Docking imatinib into its own crystal structure is the cheapest available
+protocol sanity check — run it before trusting any batch.**
+
+### Funds incident (2026-08-30, resolved)
+The account balance hit zero mid-run and RunPod terminated the pod without
+warning. Volume `e4akonl0eu` survived intact. Local safety copies of the three
+irreplaceable artefacts (`rl_v5d/policy_latest.pt`, `generator_best.pt`,
+`abl1_rf.joblib`, ~88 MB) now live in `checkpoints_backup/`, gitignored.
+Keep them: the volume remains the only other copy.
 
 ## Not started
-- Rerun all 88 ligands at exhaustiveness 16+ (multi-seed preferred), then
-  report candidate percentiles against the benchmark distribution. Frame
-  distributionally — at AUC 0.78 the protocol cannot support a per-molecule
-  binding claim.
+- Multi-seed docking (3+ seeds per ligand, take median) to put an error bar on
+  each score. dasatinib's 12th-percentile result shows single-seed variance is
+  large enough to matter.
+- Rescoring the shortlist with a method that models the receptor as flexible
+  (MM-GBSA or short MD), which is the standard escalation when empirical
+  scoring saturates around AUC 0.8.
 - Final write-up.
   Note this overlaps the replay term: replay is a likelihood term on
   remembered high-reward molecules inside the RL update, whereas the

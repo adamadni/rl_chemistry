@@ -1,1 +1,6 @@
 .claude/settings.local.json
+
+# Local safety copies of irreplaceable artefacts (2026-08-30 funds incident).
+# Deliberately not committed - repo policy is code+metrics only - but these are
+# the ONLY copies outside RunPod volume e4akonl0eu. OneDrive provides offsite.
+checkpoints_backup/
