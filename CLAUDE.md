@@ -346,10 +346,98 @@ Two methodology notes that changed the output materially:
   trivially gamed by decorating one core with different small rings. Fixed by
   adding a pairwise ECFP4 Tanimoto ceiling (`--max-sim 0.45`) on top.
 
+## Docking (2026-08-30) — protocol validated, candidates INCOMPLETE
+
+Tooling: smina (first pass), then **gnina v1.3.3** (Vina search + CNN
+rescoring) on the pod; ligands 3D-embedded with ETKDG/MMFF and protonated at
+**pH 7.4** with Dimorphite-DL (verified: dasatinib piperazine -> [NH+],
+aspirin acid -> [O-]). `src/prep_receptors.py`, `src/build_benchmark.py`,
+`src/run_docking.py`, `src/run_benchmark_docking.py`, `src/analyze_docking.py`.
+
+### Receptor ensemble, and the AlphaFold finding
+ABL1 inhibitors split by required conformation: type I (dasatinib) needs
+DFG-in, type II (imatinib, nilotinib) needs DFG-out, whose allosteric back
+pocket does not exist in DFG-in. Ensemble = 1IEP (imatinib, DFG-out), 3CS9
+(nilotinib, DFG-out), 2GQG (dasatinib, DFG-in), AF-P00519 v6 (AlphaFold).
+
+**The AlphaFold model is DFG-in.** Geometric test (DFG-Phe382 to alphaC-Glu286
+and to Lys271):
+
+    structure                    F382-E286  F382-K271   conformation
+    1IEP  (imatinib)                 13.91      10.86   DFG-out
+    3CS9  (nilotinib)                13.84      11.12   DFG-out
+    2GQG  (dasatinib)                 8.78      14.04   DFG-in
+    AlphaFold                         9.63      13.38   DFG-in
+
+Kinase domain (242-495) excised from the 1130-residue model first: full-length
+mean pLDDT is 64.7 with 49% of residues "very low", but the kinase domain
+alone is **92.6**. CA-RMSD to 1IEP decomposes as whole domain 5.00 A,
+N-lobe+hinge 2.07 A, post-A-loop 2.03 A — **the fold is right and essentially
+all the error is in the activation loop / DFG region**, i.e. precisely what
+governs type-II binding.
+
+Confirmed independently by the known drugs (smina, exhaustiveness 16): the
+penalty for docking against AlphaFold rather than the best crystal was
+imatinib **+2.80**, nilotinib **+3.30** (both type II) vs dasatinib **+1.80**
+(type I).
+
+### Enrichment: 40 actives vs 40 property-matched inactives
+`src/build_benchmark.py` — actives pChEMBL 9.70-10.82 drawn one per
+Bemis-Murcko scaffold (40 distinct, controls analogue bias); inactives 4.21-
+5.50 greedily 1:1 matched on heavy atoms. Residual imbalance **0.00 heavy
+atoms, 0.03 logP** — docking scores are extensive in molecular size, so
+without this the enrichment would be arithmetic rather than chemistry.
+
+    scheme                       AUC    95% CI          EF10%
+    affinity @ 1IEP  (DFG-out)  0.764  [0.652, 0.871]   1.50
+    affinity @ 2GQG  (DFG-in)   0.698  [0.573, 0.816]   1.25
+    affinity @ ensemble         0.776  [0.666, 0.873]   1.50
+    CNNscore @ ensemble         0.783  [0.671, 0.884]   1.25
+    CNNaffinity @ 2GQG          0.786  [0.677, 0.877]   2.00
+
+Three conclusions:
+1. **Discrimination is real but modest** — every CI excludes 0.5, but AUC
+   tops out ~0.78. The earlier 5-negative control gave 0.733 on 15 pairs with
+   a CI of [0.40, 0.95]: uninterpretable, which is why it was expanded.
+2. **CNN rescoring did not help** (0.783 vs 0.776, indistinguishable). One of
+   the two proposed fixes simply did not deliver.
+3. **Docking is a WEAKER classifier than the QSAR RF already in hand**
+   (~0.78 vs scaffold-split 0.900). Its value is *independence* — structure-
+   based, different failure modes — not accuracy. Do not treat it as the more
+   authoritative judge.
+4. **An AlphaFold-only protocol would have been useless**: AUC 0.400 on the
+   first control, i.e. worse than random, with actives and inactives separated
+   by 0.07 kcal/mol.
+
+### Search reliability — the reason candidate numbers are not final
+At exhaustiveness 8, gnina returned **positive affinities** (+16.1, +129.8) for
+one candidate, and imatinib scored -4.42 against 1IEP, its own crystal
+structure, versus -10.00 from smina at exhaustiveness 16. QC on the benchmark
+found only 2/160 affected (1 active, 1 inactive, so the AUC above stands), but
+exhaustiveness 8 is not reliable for large flexible ligands. A rerun of all 88
+ligands at exhaustiveness 16 across four receptors was **killed ~15% in when
+the RunPod account ran out of funds** (see below). Candidate percentiles from
+the exhaustiveness-8 pass are therefore NOT reported as final.
+
+### !! Compute stopped: account out of funds (2026-08-30)
+`pod create` returns "Your account balance is too low to rent a pod." RunPod
+terminated the running pod mid-run. Nothing was lost that is not recoverable,
+BUT:
+- **The final model weights `checkpoints/rl_v5d/policy_latest.pt` exist ONLY
+  on network volume `e4akonl0eu`**, along with the ChEMBL corpus, the QSAR RF,
+  the venv, and every RL checkpoint. Code and metrics are mirrored to git;
+  weights and data deliberately are not.
+- The volume persists but continues to bill (~$0.14/day for 60 GB) and is at
+  risk if the account stays unfunded. **Add funds before anything else.**
+- `docking/bench_*.json`, `docking/cand_*.json` and `docking/all16_*.log` were
+  never pulled to the mirror and are currently unreachable. The numbers above
+  are transcribed from the analysis output.
+
 ## Not started
-- **Docking.** Candidates and negatives are selected and waiting. Method not
-  yet chosen — pending discussion (rigid vs ensemble receptor, AlphaFold model
-  suitability, MD rescoring, pharmacophore approaches).
+- Rerun all 88 ligands at exhaustiveness 16+ (multi-seed preferred), then
+  report candidate percentiles against the benchmark distribution. Frame
+  distributionally — at AUC 0.78 the protocol cannot support a per-molecule
+  binding claim.
 - Final write-up.
   Note this overlaps the replay term: replay is a likelihood term on
   remembered high-reward molecules inside the RL update, whereas the

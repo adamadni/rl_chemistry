@@ -1,0 +1,12 @@
+8 ligands x 4 receptors (1IEP, 3CS9, 2GQG, AF), exhaustiveness 16
+
+  imatinib         known_active        1IEP -10.00  3CS9 -12.10  2GQG -10.50  AF  -9.30   | best -12.10 (3CS9)
+  dasatinib        known_active        1IEP  -9.60  3CS9  -8.70  2GQG -11.30  AF  -9.50   | best -11.30 (2GQG)
+  nilotinib        known_active        1IEP -13.50  3CS9 -13.50  2GQG -10.90  AF -10.20   | best -13.50 (1IEP)
+  CHEMBL550623     measured_negative   1IEP -11.10  3CS9 -11.50  2GQG -11.80  AF -10.20   | best -11.80 (2GQG)
+  CHEMBL3967164    measured_negative   1IEP  -9.70  3CS9 -10.60  2GQG -10.40  AF -10.30   | best -10.60 (3CS9)
+  CHEMBL3218002    measured_negative   1IEP  -9.10  3CS9  -9.50  2GQG -11.60  AF -10.00   | best -11.60 (2GQG)
+  CHEMBL3954137    measured_negative   1IEP  -8.20  3CS9  -8.90  2GQG  -7.60  AF  -8.00   | best  -8.90 (3CS9)
+  CHEMBL6032245    measured_negative   1IEP -11.50  3CS9 -12.40  2GQG -11.10  AF  -9.50   | best -12.40 (3CS9)
+
+wrote /workspace/rl_chemistry/docking/results_control.json
