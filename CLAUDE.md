@@ -269,16 +269,88 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 `pct_above_tau` and `p_act` (learning signal). Per-step metrics land in
 `<out>/history.json`, eval summary in `<out>/eval.json`.
 
+## v5 — transfer learning + the complete 2^3 factorial (2026-08-29)
+
+`transfer_phase()` in train_rl.py implements paper component 1: every
+`--tl-every` steps the RL objective is suspended and the policy runs pure MLE
+on a scaffold-diverse slice of the replay buffer (`ReplayBuffer.sample_diverse`,
+round-robin over scaffolds so truncation costs breadth last). It shares the
+buffer with the replay term but is a different mechanism — replay is an
+auxiliary loss inside every update, permanently bounded by the PPO surrogate
+it competes with; a TL phase has no RL objective present at all. That makes it
+better at consolidating a rare chemotype and by far the most dangerous of the
+three, since nothing inside an MLE phase bounds how far the policy moves.
+Guards: smaller `--tl-lr`; a deduplicated scaffold-diverse training set; and
+**a KL-to-prior tripwire after every epoch** (`--tl-max-kl`) that aborts the
+phase mid-way. The tripwire is the load-bearing one — without it the adaptive
+beta_kl controller only sees the damage on the *next* rollout, after the phase
+has finished moving the policy. Over 31 phases across four runs it fired once.
+
+### Full factorial, n=5000. F = diversity filter, R = replay, T = transfer learning
+| run | FRT | frameworks | top fw | hi-reward mols | P>=.5 | P>=.8 | valid | uniq | scaffolds | unc | AD% |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v3   | `---` | 19 | 77% | 118 | 5.72 | 3.76 | 99.58 | 96.00 | 2938 | 0.223 | 94.4 |
+| v4a  | `F--` | 231 | 4% | 411 | 11.36 | **8.89** | 99.66 | 93.34 | 2753 | 0.199 | **45.2** |
+| v4b  | `-R-`* | 3 | 40% | 5 | 0.12 | 0.00 | 99.68 | 99.28 | 2890 | 0.237 | 93.4 |
+| v4b2 | `-R-` | 7 | 14% | 7 | 0.10 | 0.04 | 99.68 | 99.68 | 3202 | 0.241 | 93.6 |
+| v5a  | `--T` | 19 | 47% | 77 | 5.66 | 3.91 | 99.68 | 90.33 | 2105 | 0.192 | 97.0 |
+| v4c  | `FR-` | 138 | 7% | 187 | 3.76 | 1.79 | 99.54 | 99.08 | 3073 | 0.224 | 94.4 |
+| v5b  | `F-T` | 192 | 7% | 271 | 5.94 | 2.87 | 99.72 | 97.69 | 2801 | 0.210 | 96.6 |
+| v5c  | `-RT` | 8 | 22% | 9 | 0.10 | 0.00 | 99.62 | 99.50 | 3101 | 0.243 | 93.4 |
+| **v5d** | **`FRT`** | **333** | **10%** | **589** | **14.92** | 6.96 | **99.76** | 93.46 | 2542 | 0.215 | **99.8** |
+
+\* v4b ran with monotonic tau (no `--threshold-decay`); v4b2 is the corrected re-run.
+
+### What the factorial actually shows
+1. **The diversity filter is the only component that produces learning +
+   diversity on its own.** Every cell containing F reaches P>=0.5 of 3.8–14.9%
+   and 138–333 frameworks. Every cell without F either fails to learn at all
+   (any cell with R and no F) or learns v3-like potency with v3-like narrowness
+   (v5a: 19 frameworks, 47% top share).
+2. **Replay alone does not work, and the tau latch was not the reason.**
+   This corrects the v4 write-up. v4b2 fixes the monotonic-tau confound and
+   still reaches P>=0.5 = **0.10%**, against the pretrained prior's own ~0.10%.
+   Replay is a *consolidation* mechanism: it re-presents molecules already
+   found to be good, so with nothing generating those molecules it has nothing
+   to consolidate and cannot bootstrap. Admission needs raw reward >= 0.4, and
+   a run that never gets there never fills the buffer. v5c (`-RT`) confirms it:
+   two consolidation mechanisms together, still 0.10%.
+3. **All three together are superadditive, not merely additive.** v5d beats
+   the best single component on diversity (333 vs 231 frameworks) *and* on
+   potency (14.9% vs 11.4%) *and* fixes v4a's applicability-domain collapse
+   outright (**99.8% vs 45.2%**, the highest AD of any run including v3).
+4. **The AD story resolves cleanly.** F alone drifts out of domain (45.2%).
+   Adding either memory mechanism repairs it — R (94.4%), T (96.6%), both
+   (99.8%). This confirms the push/anchor account: the filter pushes the
+   policy off the mined chemotype, and the buffer-backed mechanisms anchor it
+   to chemistry already observed to score well. Their value here is domain
+   tethering, not sample efficiency.
+
+**Final model: `checkpoints/rl_v5d/policy_latest.pt`.**
+
+## Candidate selection for docking
+`src/select_candidates.py` — 5 generated candidates + 5 measured negatives,
+in `results/candidates_v5d.json`. Not docked; selection only.
+
+Two methodology notes that changed the output materially:
+- **Negatives are size-matched on heavy-atom count** (candidates mean 32.6,
+  all five negatives at 33). Docking scores are extensive in molecular size,
+  so unmatched negatives would manufacture a positive result from arithmetic.
+  They are measured-inactive ABL1 compounds (pChEMBL 4.02–4.78) rather than
+  random or unmeasured decoys.
+- **A framework count is a good aggregate statistic and a bad selection
+  criterion.** The first run picked five "distinct framework" molecules that
+  were all one chemotype, differing only in an amide substituent that happened
+  to be cyclic — Murcko pulls substituent rings into the scaffold, so each got
+  its own framework while the binding core was identical. At n=5 the metric is
+  trivially gamed by decorating one core with different small rings. Fixed by
+  adding a pairwise ECFP4 Tanimoto ceiling (`--max-sim 0.45`) on top.
+
 ## Not started
-- **A v4b re-run with `--threshold-decay 0.1`** — v4b's failure is confounded:
-  it tested "replay alone" AND "monotonic tau" at once, so it does not
-  cleanly isolate replay's contribution. Rerunning it with decay on is the
-  one ablation still owed.
-- **Deciding v4a vs v4c**, i.e. whether the AD collapse is acceptable. If
-  extrapolation is the concern, the fix is a real AD term in the reward
-  rather than relying on RF ensemble variance, which demonstrably fails
-  out of domain.
-- Transfer learning on own high-reward outputs (3rd paper component).
+- **Docking.** Candidates and negatives are selected and waiting. Method not
+  yet chosen — pending discussion (rigid vs ensemble receptor, AlphaFold model
+  suitability, MD rescoring, pharmacophore approaches).
+- Final write-up.
   Note this overlaps the replay term: replay is a likelihood term on
   remembered high-reward molecules inside the RL update, whereas the
   paper's component 1 is a separate periodic fine-tuning phase.
@@ -286,19 +358,20 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 - Final candidate generation + write-up.
 
 ## Next step
-The success criterion set before the run was: more generic frameworks AND a
-lower top-framework share, while holding valid%, novelty, `pct_p_ge_0.5`
-and the AD metrics. **v4c meets it on every axis except `pct_p_ge_0.5`**
-(3.8% vs 5.7%); v4a beats it on potency and diversity but fails the AD
-criterion badly (45.2% vs 94.4%). So:
-1. Re-run v4b with `--threshold-decay 0.1` to disentangle "replay alone"
-   from "monotonic tau" — currently confounded.
-2. Decide the v4a/v4c trade (potency+diversity vs domain validity). If v4a's
-   chemistry is wanted, first replace the RF-variance uncertainty penalty
-   with an explicit AD term — ensemble variance provably did not detect
-   the out-of-domain drift here.
-3. Then: transfer learning on own high-reward outputs, and final candidate
-   generation from whichever policy is chosen.
+Model work is complete: **v5d meets every success criterion set in advance**
+(17.5x more generic frameworks, top share 77% -> 10%, potency 5.7% -> 14.9%,
+AD 94.4% -> 99.8%, validity and novelty held). Remaining:
+1. Agree a docking protocol, then score the 5 candidates vs the 5 matched
+   negatives in `results/candidates_v5d.json`. **Do not run docking before
+   that discussion.**
+2. Final write-up.
+
+The main known weakness is no longer the generator — it is the **reward
+model**. The RF is the only judge of activity, was trained on 3,097 ABL1
+compounds, and its ensemble variance provably fails to detect out-of-domain
+drift (v4a: uncertainty fell to 0.199 while AD coverage halved). Docking is
+valuable here precisely because it is an orthogonal check that does not
+depend on the RF at all.
 
 ## Local mirror for review
 The pod is the source of truth for data/weights, but all code + metrics are

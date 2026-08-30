@@ -151,6 +151,38 @@ class ReplayBuffer:
         w = w / w.mean()
         return smiles, w
 
+    def sample_diverse(self, n):
+        """Up to `n` molecules, round-robin over scaffolds, best-first.
+
+        Distinct from `sample()`: that draws with replacement for one RL
+        update, this builds the fixed training set for a transfer-learning
+        phase, where the same molecule appearing twice is wasted gradient and
+        an over-represented scaffold is the failure mode being designed
+        against. Round-robin takes each scaffold's best molecule before any
+        scaffold's second, so truncating at `n` costs breadth last rather
+        than first.
+        """
+        if not self.by_scaffold:
+            return [], np.zeros(0, dtype=np.float32)
+        ranked = {k: sorted(v, key=lambda t: -t[0]) for k, v in self.by_scaffold.items()}
+        order = sorted(ranked, key=lambda k: -ranked[k][0][0])
+        out = []
+        depth = 0
+        while len(out) < n:
+            added = False
+            for k in order:
+                if depth < len(ranked[k]):
+                    out.append(ranked[k][depth])
+                    added = True
+                    if len(out) >= n:
+                        break
+            if not added:
+                break
+            depth += 1
+        rewards = np.asarray([r for r, _ in out], dtype=np.float32)
+        w = rewards - rewards.min() + 1e-3
+        return [s for _, s in out], (w / w.mean()).astype(np.float32)
+
     def stats(self):
         sizes = [len(v) for v in self.by_scaffold.values()]
         return {"size": len(self), "n_scaffolds": len(self.by_scaffold),

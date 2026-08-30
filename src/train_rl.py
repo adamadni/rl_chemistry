@@ -70,6 +70,18 @@ chemotypes alive in the update so the policy is not re-paying their
 discovery cost every time the trust region moves (replay_buffer.py). Both
 default off; the CLAUDE.md v3 command line reproduces v3 unchanged.
 
+v5 adds the paper's first stabilizer, transfer learning on the generator's
+own high-reward output (`--transfer-learning`): every `--tl-every` steps the
+RL objective is suspended and the policy does a few epochs of pure maximum
+likelihood on a scaffold-diverse slice of the replay buffer. It shares the
+buffer with the replay term but is a genuinely different mechanism -- replay
+is an auxiliary loss competing with the PPO surrogate inside every update
+and bounded by it, whereas a TL phase has no RL objective present at all.
+That is why it consolidates a rare chemotype better, and why it is the most
+dangerous of the three: nothing inside an MLE phase bounds how far the policy
+moves. The KL-to-prior tripwire in `transfer_phase` is the real guard; the
+smaller LR and the diverse training set only slow it down.
+
 Objective per rollout:
     tau              = ThresholdShaper's current bar (monotonic)
     shaped_reward    = reward(seq) - tau
@@ -287,6 +299,77 @@ def replay_nll(policy, padded, vocab):
     tok_logp = logp.gather(-1, target.unsqueeze(-1)).squeeze(-1)
     mask = (target != PAD).float()
     return -(tok_logp * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+def transfer_phase(policy, prior, opt, buf, vocab, args, step):
+    """Paper component 1: periodic supervised fine-tuning of the generator on
+    its OWN high-reward output, between RL rollouts.
+
+    Distinct from the replay term, which is an auxiliary loss *inside* each RL
+    update and therefore always competing with the PPO surrogate and bounded
+    by it. This is a separate phase: for a few hundred gradient steps the RL
+    objective is not present at all and the policy is doing pure maximum
+    likelihood on a fixed molecule set. That is what makes it effective at
+    consolidating a chemotype the policy found only occasionally -- and what
+    makes it by far the most dangerous of the three components. Nothing in an
+    MLE phase bounds how much probability mass moves onto the training set:
+    no clipping, no trust region, no advantage weighting. Run long enough it
+    would simply overwrite the policy with the buffer.
+
+    Three things bound it here, and the third is the one that actually matters:
+      1. A smaller LR than RL (`--tl-lr`), applied by temporarily overriding
+         the optimiser's LR rather than building a second Adam -- two Adams on
+         the same parameters keep separate momentum estimates that then fight
+         each other across phase boundaries.
+      2. A scaffold-diverse, deduplicated training set from the replay
+         buffer's round-robin sampler, so MLE cannot concentrate on one core.
+      3. **A KL-to-prior tripwire checked after every epoch.** The frozen
+         pretrained prior is the only fixed reference point in the whole
+         system; if an MLE phase drags the policy further than `--tl-max-kl`
+         from it, the phase aborts mid-way and RL resumes. Without this the
+         adaptive beta_kl controller only sees the damage on the *next*
+         rollout, i.e. after the phase has already finished moving the policy.
+
+    Returns a dict of diagnostics; a no-op (empty dict) when the buffer has
+    too few molecules to be worth a phase.
+    """
+    mols, w = buf.sample_diverse(args.tl_max_mols)
+    if len(mols) < args.tl_min_mols:
+        return {}
+    padded, keep = encode(mols, vocab, args.max_len, DEV)
+    if padded is None:
+        return {}
+    w = torch.tensor(w[keep], device=DEV, dtype=torch.float32)
+    n = padded.shape[0]
+    base_lr = opt.param_groups[0]["lr"]
+    for g in opt.param_groups:
+        g["lr"] = args.tl_lr
+    policy.train()
+    nll_last, epochs_run, aborted, kl_now = 0.0, 0, False, 0.0
+    try:
+        for epoch in range(args.tl_epochs):
+            perm = torch.randperm(n, device=DEV)
+            for i in range(0, n, args.tl_batch):
+                idx = perm[i:i + args.tl_batch]
+                nll = replay_nll(policy, padded[idx], vocab)
+                loss = (w[idx] * nll).mean()
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(policy.parameters(), 5.0)
+                opt.step()
+                nll_last = float(loss.item())
+            epochs_run = epoch + 1
+            # ---- tripwire: how far has this phase pushed us from the prior?
+            with torch.no_grad():
+                probe, plogp_probe, _ = sample_with_logprobs(
+                    policy, vocab, min(64, args.batch), args.max_len, args.temp)
+                kl_now = float((plogp_probe - prior_logprob(prior, probe, vocab)).mean().item())
+            if kl_now > args.tl_max_kl:
+                aborted = True
+                break
+    finally:
+        for g in opt.param_groups:
+            g["lr"] = base_lr
+    return {"tl_step": step, "tl_n_mols": n, "tl_epochs_run": epochs_run,
+            "tl_nll": nll_last, "tl_kl_after": kl_now, "tl_aborted": aborted}
 def scaffold_of(smi):
     m = Chem.MolFromSmiles(smi)
     if m is None:
@@ -335,6 +418,20 @@ def main():
     ap.add_argument("--replay-k", type=int, default=24)
     ap.add_argument("--replay-coef", type=float, default=0.05)
     ap.add_argument("--replay-start", type=int, default=200)
+    # ---- transfer learning on own high-reward output (component 1)
+    ap.add_argument("--transfer-learning", action="store_true",
+                    help="periodic supervised MLE phases on the buffer; populates the "
+                         "buffer even when --replay (the inline term) is off")
+    ap.add_argument("--tl-every", type=int, default=500)
+    ap.add_argument("--tl-start", type=int, default=1000)
+    ap.add_argument("--tl-epochs", type=int, default=2)
+    ap.add_argument("--tl-batch", type=int, default=128)
+    ap.add_argument("--tl-max-mols", type=int, default=500)
+    ap.add_argument("--tl-min-mols", type=int, default=50,
+                    help="skip the phase entirely below this many buffered molecules")
+    ap.add_argument("--tl-lr", type=float, default=1e-5)
+    ap.add_argument("--tl-max-kl", type=float, default=8.0,
+                    help="abort the phase mid-way if KL-to-prior exceeds this")
     ap.add_argument("--log-every", type=int, default=10)
     ap.add_argument("--save-every", type=int, default=200)
     ap.add_argument("--out", type=str, default=f"{CKPT}/rl_baseline")
@@ -351,8 +448,11 @@ def main():
                              args.threshold_update_every, args.threshold_init, args.threshold_decay)
     dfilter = DiversityFilter(args.df_bucket_size, args.df_mode,
                               args.df_record_threshold) if args.diversity_filter else None
+    # The buffer backs BOTH component 1 (transfer-learning phases) and
+    # component 2's inline replay term, so either flag creates it.
     replay = ReplayBuffer(args.replay_capacity, args.replay_max_per_scaffold,
-                          args.replay_min_reward, args.seed) if args.replay else None
+                          args.replay_min_reward, args.seed) \
+        if (args.replay or args.transfer_learning) else None
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
     baseline = 0.0
     beta_kl = args.beta_kl
@@ -422,7 +522,7 @@ def main():
         # ---- clip or (if recomputed) makes ratio==1 and silently reverts to
         # ---- the uncapped REINFORCE step that collapsed v1.
         rpad, rw = None, None
-        if replay is not None and step >= args.replay_start and len(replay):
+        if args.replay and replay is not None and step >= args.replay_start and len(replay):
             rs, w = replay.sample(args.replay_k)
             if rs:
                 rpad, keep = encode(rs, vocab, args.max_len, DEV)
@@ -477,6 +577,17 @@ def main():
         if replay is not None:
             row["replay_nll"] = replay_term
             row.update({f"replay_{k}": v for k, v in replay.stats().items()})
+        # ---- Transfer-learning phase, AFTER this step's RL update so the
+        # ---- rollout it was computed from is fully consumed first.
+        if (args.transfer_learning and replay is not None and step >= args.tl_start
+                and step % args.tl_every == 0):
+            tl = transfer_phase(policy, prior, opt, replay, vocab, args, step)
+            if tl:
+                row.update(tl)
+                print(f"      TL @ step {step}: {tl['tl_n_mols']} mols, "
+                      f"{tl['tl_epochs_run']}/{args.tl_epochs} epochs, nll {tl['tl_nll']:.3f}, "
+                      f"kl_after {tl['tl_kl_after']:.2f}"
+                      f"{' ABORTED (kl tripwire)' if tl['tl_aborted'] else ''}", flush=True)
         history.append(row)
         if step % args.log_every == 0 or step == 1:
             extra = ""
