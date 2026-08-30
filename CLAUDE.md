@@ -409,7 +409,45 @@ Three conclusions:
    first control, i.e. worse than random, with actives and inactives separated
    by 0.07 kcal/mol.
 
-### FINAL RESULT — candidates vs imatinib (exhaustiveness 16, `results/docking/final_table.json`)
+### FINAL RESULT — 3-seed medians (`results/docking/multiseed_table.json`)
+**This supersedes the single-seed table below.** Each ligand docked with seeds
+{7, 42, 1234} against all three crystals; score = median over seeds of the
+best-over-crystals affinity.
+
+    seed-to-seed spread, all 88 ligands:
+      median 0.13   mean 0.35   90th pct 0.84   MAX 3.40 kcal/mol
+    benchmark: 40 actives median-mean -11.34 | 40 matched inactives -9.86
+
+    molecule    source          median  spread          range    %ile   RF P
+    nilotinib   marketed drug   -13.63    0.03  [-13.65,-13.62]  100%     -
+    imatinib    marketed drug   -12.81    0.12  [-12.86,-12.74]   90%     -
+    cand5       RL v5d          -12.64    0.60  [-12.76,-12.16]   90%   0.814
+    cand3       RL v5d          -12.05    0.51  [-12.13,-11.62]   75%   0.863
+    cand4       RL v5d          -10.98    0.62  [-11.60,-10.98]   32%   0.818
+    cand1       RL v5d          -10.51    0.02  [-10.51,-10.49]   22%   1.000
+    dasatinib   marketed drug   -10.32    0.14  [-10.42,-10.28]   15%     -
+    cand2       RL v5d           -9.27    0.04  [ -9.30, -9.26]    5%   0.985
+
+**CORRECTION: cand5 does NOT outscore imatinib.** The single-seed pass had
+cand5 at -12.97 vs imatinib -12.79 and reported cand5 as the better scorer.
+On 3-seed medians it is -12.64 vs -12.81, i.e. imatinib slightly ahead, and
+the 0.17 gap sits well inside the 0.72 combined seed spread. The two are
+**statistically indistinguishable**, and the earlier claim was single-draw
+noise. No candidate robustly outscores imatinib; cand3, cand4, cand1 and
+cand2 are all robustly worse (gaps 0.76-3.54 against combined spreads
+0.14-0.74).
+
+The set-level claim survives: candidate median-mean -11.09 against benchmark
+actives -11.34 and matched inactives -9.86. **The candidates sit with the
+drugs as a distribution, while no individual candidate beats imatinib.**
+
+Seed variance is strongly ligand-dependent and that is itself informative:
+the three marketed drugs are highly reproducible (spread 0.03-0.14) whereas
+cand3/4/5 scatter 0.51-0.62, i.e. the search finds materially different best
+poses for them run to run. One ligand in the set spread **3.40 kcal/mol**.
+Single-seed docking should not be trusted on this target.
+
+### Single-seed table (superseded, kept for the record) — `results/docking/final_table.json`
 All ligands docked in one run under an identical protocol, so imatinib is a
 like-for-like anchor rather than a literature value. Score = best over the
 three crystals; percentile is against the 40 known actives docked alongside.

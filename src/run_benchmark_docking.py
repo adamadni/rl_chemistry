@@ -66,7 +66,7 @@ def embed(smiles, seed=42):
 ROW = re.compile(r"^\s*1\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)")
 
 
-def dock(gnina, rec, lig, box, out, exh, seed=42):
+def dock(gnina, rec, lig, box, out, exh, seed):
     cmd = [gnina, "-r", rec, "-l", lig, "-o", out,
            "--center_x", str(box["center"][0]), "--center_y", str(box["center"][1]),
            "--center_z", str(box["center"][2]),
@@ -94,6 +94,11 @@ def main():
     ap.add_argument("--ligands", default=None, help="defaults to docking/benchmark.json")
     ap.add_argument("--exhaustiveness", type=int, default=8)
     ap.add_argument("--ph", type=float, default=7.4)
+    ap.add_argument("--seed", type=int, default=42,
+                    help="Vina search seed. The search is stochastic and its spread is NOT "
+                         "negligible: at exhaustiveness 8 imatinib scored -4.42 against its "
+                         "own crystal structure and -12.79 at 16. Run several seeds and take "
+                         "the median rather than trusting one draw.")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -119,16 +124,17 @@ def main():
         sdf = os.path.join(ldir, f"{L['name']}.sdf")
         w = Chem.SDWriter(sdf); w.write(m); w.close()
         L["dock"] = dock(gnina, os.path.join(args.dir, "struct", f"{args.receptor}_rec.pdb"),
-                         sdf, box, os.path.join(args.dir, "out", f"{L['name']}_{args.receptor}.sdf"),
-                         args.exhaustiveness)
+                         sdf, box,
+                         os.path.join(args.dir, "out", f"{L['name']}_{args.receptor}_s{args.seed}.sdf"),
+                         args.exhaustiveness, args.seed)
         d = L["dock"]
         print(f"  [{i}/{len(ligs)}] {L['name']:<16} {L['class']:<20} "
               + (f"aff {d['affinity']:7.2f}  CNNscore {d['cnn_score']:.4f}  "
                  f"CNNaff {d['cnn_affinity']:6.3f}" if d else "FAILED"), flush=True)
 
-    out = args.out or os.path.join(args.dir, f"bench_{args.receptor}.json")
+    out = args.out or os.path.join(args.dir, f"bench_{args.receptor}_s{args.seed}.json")
     json.dump({"receptor": args.receptor, "box": box, "ph": args.ph,
-               "exhaustiveness": args.exhaustiveness, "ligands": ligs},
+               "exhaustiveness": args.exhaustiveness, "seed": args.seed, "ligands": ligs},
               open(out, "w"), indent=1)
     print(f"wrote {out}", flush=True)
 
