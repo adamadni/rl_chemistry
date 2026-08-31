@@ -34,10 +34,19 @@ RDLogger.DisableLog("rdApp.*")
 
 
 def protonate(smiles, ph=7.4):
-    """Dominant microstate at `ph`; falls back to the input on failure."""
+    """Dominant microstate at `ph`; falls back to the input on failure.
+
+    precision=0.0 is load-bearing. The default 1.0 makes Dimorphite ENUMERATE
+    every microstate within +/-1 pH unit -- typically 4-8 per molecule, with
+    formal charges spanning -1/0/+1 -- and taking out[0] then picks an
+    arbitrary one rather than the dominant form. The docking runs recorded in
+    CLAUDE.md up to 2026-08-30 used the buggy call, so their ligands were
+    protonated non-deterministically; spot checks (dasatinib -> [NH+],
+    aspirin -> [O-]) happened to be right but were not guaranteed.
+    """
     try:
         from dimorphite_dl import protonate_smiles
-        out = protonate_smiles(smiles, ph_min=ph, ph_max=ph, precision=1.0)
+        out = protonate_smiles(smiles, ph_min=ph, ph_max=ph, precision=0.0)
         if out:
             return out[0]
     except Exception as e:

@@ -576,12 +576,59 @@ irreplaceable artefacts (`rl_v5d/policy_latest.pt`, `generator_best.pt`,
 `abl1_rf.joblib`, ~88 MB) now live in `checkpoints_backup/`, gitignored.
 Keep them: the volume remains the only other copy.
 
+## Congeneric series for RBFE (2026-08-31) — `src/build_series.py`, `src/select_rbfe_set.py`
+Relative FEP is the rigorous ranking method and the one this project could not
+use: RBFE morphs one ligand into another and needs a COMMON CORE, while the
+candidates were selected at pairwise Tanimoto < 0.45 to be diverse. Fix: keep
+the diversity filter for FINDING a chemotype, then elaborate the one whose pose
+validated. cand4 and cand5 are the two reproducing the full type-II signature.
+
+### The generator cannot elaborate cand5, and can elaborate cand4
+Sampling 40,000 molecules from v5d and matching each seed's Bemis-Murcko core:
+
+    cand4 core   1157 / 33,025 unique valid  = 3.50%
+    cand5 core      2 / 33,025               = 0.006%   (~580x rarer)
+
+**This is the diversity objective's cost, made concrete.** v5d was trained to
+spread across 333 frameworks and it does — which means it is correspondingly
+unwilling to produce many near-analogues of any particular one. Scaffold
+diversity and series elaboration are opposed objectives, and a model optimised
+hard for the first is a poor lead-optimisation engine. A follow-up run would
+want scaffold-conditioned sampling or a much weaker filter.
+
+### Deliverable: `results/series/rbfe_cand4.json` — 13 ligands, star map
+MCS 26 atoms / 29 bonds = **78% of the average member** (a valid RBFE core);
+MW 443-499, all sub-500; heavy-atom delta from seed <= 4; predicted activity
+P 0.528-0.732. Star topology on the pose-validated seed: 12 edges, mean
+Tanimoto 0.659. L10/L12 (isopropyl / tert-butyl acylurea homologues,
+Tanimoto 0.825 to seed) are the cheapest edges; five cycle closures are
+suggested in the JSON for statistical-error estimation.
+
+Liability screening rejected 539 of 607 size-passing members — PAINS + BRENK
+alerts, charge change at pH 7.4, and double-bond stereo changes relative to
+the seed. Charge change alone accounted for 354.
+
+### !! BUG FOUND AND FIXED: Dimorphite protonation was non-deterministic
+`protonate_smiles(..., precision=1.0)` (the default) **enumerates every
+microstate within +/-1 pH unit** — 4 to 8 per molecule here, formal charges
+spanning -1/0/+1 — and the code took `out[0]`, an arbitrary member of that
+list rather than the dominant form. `precision=0.0` returns the single
+dominant state (verified: dasatinib +1, aspirin -1, cand4 seed 0).
+
+Fixed in `src/select_rbfe_set.py` and `src/run_benchmark_docking.py`.
+**Consequence for results already recorded: every docking run up to
+2026-08-30 protonated its ligands non-deterministically.** Spot checks at the
+time (dasatinib -> [NH+], aspirin -> [O-]) happened to be correct but were
+luck of list ordering, not a guarantee. Vina-class scoring is only weakly
+electrostatic so the effect on *ranking* is likely second-order, but the
+docking numbers are not reproducible as run and should be regenerated with
+the fixed call before being published.
+
 ## Not started
-- Multi-seed docking (3+ seeds per ligand, take median) to put an error bar on
-  each score. dasatinib's 12th-percentile result shows single-seed variance is
-  large enough to matter.
-- Rescoring the shortlist with a method that models the receptor as flexible
-  (MM-GBSA or short MD), which is the standard escalation when empirical
+- **Re-dock with the fixed protonation** (see bug above) before quoting any
+  docking number externally. ~1 h GPU.
+- Docking + pose validation of the 13-member RBFE series, then RBFE itself.
+- MM-GBSA or short-MD rescoring — the standard escalation once empirical
   scoring saturates around AUC 0.8.
 - Final write-up.
   Note this overlaps the replay term: replay is a likelihood term on
