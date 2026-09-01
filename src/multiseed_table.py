@@ -21,13 +21,15 @@ CRYSTALS = ["1IEP", "3CS9", "2GQG"]
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--prefix", default="ms",
+                    help="'ms' = pre-fix multi-seed run; 'rd' = re-dock with corrected pH 7.4 protonation")
     ap.add_argument("--cand-json", default="/workspace/rl_chemistry/results_candidates_v5d.json")
     ap.add_argument("--out", default="/workspace/rl_chemistry/docking/multiseed_table.json")
     args = ap.parse_args()
 
     runs = {}
-    for p in sorted(glob.glob(os.path.join(args.dir, "ms_*_s*.json"))):
-        m = re.match(r"ms_(\w+)_s(\d+)\.json", os.path.basename(p))
+    for p in sorted(glob.glob(os.path.join(args.dir, f"{args.prefix}_*_s*.json"))):
+        m = re.match(rf"{args.prefix}_(\w+)_s(\d+)\.json", os.path.basename(p))
         if not m:
             continue
         rec, seed = m.group(1), int(m.group(2))
@@ -66,7 +68,8 @@ def main():
 
     cand_meta = {f"cand{i}": d for i, d in
                  enumerate(json.load(open(args.cand_json))["candidates"], 1)}
-    order = ["nilotinib", "imatinib", "dasatinib"] + [f"cand{i}" for i in range(1, 6)]
+    order = (["nilotinib", "imatinib", "dasatinib"] + [f"cand{i}" for i in range(1, 6)]
+             + sorted(n for n in stats if n.startswith("rbfe_")))
     order = [n for n in order if n in stats]
     order.sort(key=lambda n: stats[n]["median"])
 

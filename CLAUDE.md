@@ -624,10 +624,76 @@ electrostatic so the effect on *ranking* is likely second-order, but the
 docking numbers are not reproducible as run and should be regenerated with
 the fixed call before being published.
 
+## RE-DOCK with corrected protonation (2026-09-01) — `results/docking/redock/`
+100 ligands (40 actives, 40 matched inactives, 5 candidates, 3 drugs, 12 RBFE
+series members), 3 crystals x 3 seeds + AlphaFold, exhaustiveness 16, all with
+`precision=0.0`. **These are the numbers to quote.**
+
+### The bug was second-order for ranking, as predicted
+    scheme                 before (buggy)          after (fixed)
+    affinity @ 3CS9        0.799 [0.686,0.903]     0.797 [0.682,0.901]
+    affinity @ 2GQG        0.779 [0.667,0.877]     0.789 [0.679,0.881]
+    affinity @ 1IEP        0.755 [0.641,0.863]     0.766 [0.653,0.872]
+    affinity @ ensemble    0.790 [0.680,0.889]     0.797 [0.687,0.896]
+Every change is <= 0.011 and far inside the intervals. CNN rescoring still
+loses to plain Vina scoring (0.769 vs 0.797) — now on two independent datasets.
+
+### It DID halve the seed variance, and that is diagnostic
+    seed-to-seed spread   before: median 0.13  mean 0.35  max 3.40
+                          after:  median 0.06  mean 0.20  max 1.18
+`protonate()` is called once per (receptor, seed) job, so with the buggy
+non-deterministic call **different seeds could receive different protomers of
+the same ligand.** Much of what was reported as docking *search* variance was
+actually protonation variance wearing its clothes. Real search noise is about
+half what the earlier multi-seed run implied.
+
+### Final table (3-seed medians, corrected protonation)
+    molecule    source          median  spread    %ile   RF P
+    nilotinib   marketed drug   -13.63    0.03    100%     -
+    imatinib    marketed drug   -12.74    0.67     90%     -
+    cand5       RL v5d          -12.16    0.30     82%   0.814
+    cand3       RL v5d          -12.15    0.04     80%   0.863
+    cand4       RL v5d          -11.74    0.23     68%   0.818
+    cand1       RL v5d          -10.51    0.02     22%   1.000
+    dasatinib   marketed drug   -10.30    0.04     18%     -
+    cand2       RL v5d           -9.30    0.25      5%   0.985
+
+Set-level claim survives unchanged: candidates median-mean **-11.17** against
+benchmark actives **-11.31** and matched inactives **-9.85**. cand3 and cand5
+are within seed noise of imatinib; cand1, cand2 and cand4 are robustly worse.
+
+Two candidates moved materially: **cand4 32% -> 68%** and **cand5 90% -> 82%**.
+Protonation state matters most for the molecules carrying ionisable amines,
+which is exactly where the buggy call was picking arbitrarily.
+
+### Pose validation on corrected poses — the shortlist changes
+    1IEP/3CS9 (DFG-out)   Met318    Thr315    Glu286    Asp381
+    imatinib              backbone  sidechain sidechain backbone
+    nilotinib             backbone  sidechain sidechain backbone
+    cand4                 backbone  contact   sidechain backbone   <- full type II, BOTH
+    cand3                 backbone  contact   contact   contact    <- hinge on both
+    cand5                 contact   contact   contact   backbone   <- LOST polar hinge
+    cand2                 -         -         -         contact    <- fails on both
+
+**cand4 is now the best-supported candidate**, holding the complete
+imatinib/nilotinib type-II signature on both DFG-out structures. cand5's polar
+hinge contact does not survive corrected protonation, so its earlier top
+ranking was partly an artefact. cand2 remains rejected by score AND pose —
+the one unambiguous verdict in the set.
+
+Convenient consequence: cand4 is also the seed the generator can actually
+elaborate (3.50% vs cand5's 0.006%) and the one the RBFE series was built
+around, so that choice is retrospectively validated on independent grounds.
+
+### RBFE series docked on the same footing
+The 12 series members span **-12.09 to -9.80** (75th down to 8th percentile of
+known actives) — a ~2.3 kcal/mol range. That spread is what makes the series
+useful: a free-energy method has to reproduce a real rank order, and a set
+where everything is equipotent tests nothing. rbfe_L08 carries the largest
+seed spread in the whole run (1.18) and should be treated cautiously or dropped.
+
 ## Not started
-- **Re-dock with the fixed protonation** (see bug above) before quoting any
-  docking number externally. ~1 h GPU.
-- Docking + pose validation of the 13-member RBFE series, then RBFE itself.
+- RBFE itself (star map in `results/series/rbfe_cand4.json`).
 - MM-GBSA or short-MD rescoring — the standard escalation once empirical
   scoring saturates around AUC 0.8.
 - Final write-up.

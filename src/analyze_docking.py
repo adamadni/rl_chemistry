@@ -54,11 +54,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
     ap.add_argument("--receptors", nargs="+", default=["1IEP", "2GQG"])
+    ap.add_argument("--pattern", default="bench_{r}.json",
+                    help="filename template; use e.g. 'rd_{r}_s42.json' for the "
+                         "re-dock with corrected pH 7.4 protonation")
     args = ap.parse_args()
 
     per = {}
     for r in args.receptors:
-        path = os.path.join(args.dir, f"bench_{r}.json")
+        path = os.path.join(args.dir, args.pattern.format(r=r))
         if not os.path.exists(path):
             print(f"missing {path}"); continue
         per[r] = {L["name"]: L for L in json.load(open(path))["ligands"]}
