@@ -692,8 +692,33 @@ useful: a free-energy method has to reproduce a real rank order, and a set
 where everything is equipotent tests nothing. rbfe_L08 carries the largest
 seed spread in the whole run (1.18) and should be treated cautiously or dropped.
 
-## Not started
-- RBFE itself (star map in `results/series/rbfe_cand4.json`).
+## PROJECT WRAPPED (2026-09-08)
+The stated goal — reproduce Korshunova et al. 2022 for ABL1 with policy
+modifications — is met. v5d is the final model; the full 2^3 ablation, the
+docking validation and the limitations are written up in `README.md`.
+
+### RBFE: set up, deliberately not run
+Inputs are prepared and validated (12 ligands embedded on the pose-validated
+cand4 with core RMSD 0.000, protein through PDBFixer, star map in
+`results/series/rbfe_cand4.json`). `src/prep_rbfe.py` works;
+`src/run_rbfe.py` has **never completed a run** — the pilot edge died on
+`CUDA_ERROR_UNSUPPORTED_PTX_VERSION`. A full campaign is 3-5 GPU-days
+(~$55-90) and was judged past the scope of a reproduction study.
+
+Two operational notes if it is ever resumed:
+- The openfe conda env lives on network volume `e4akonl0eu`, but **RunPod
+  hosts differ in driver version** (seen: 580 -> CUDA 13.0, 570 -> CUDA 12.8).
+  An env resolved against one host's driver fails on another. Pin
+  `cuda-version=12.8`, which both accept. A `mamba install cuda-version=12.8
+  openmm=8.4` was started and not confirmed finished.
+- Setup upstream of the GPU is validated: LOMAP mapped 42 atoms SEED->L01,
+  hybrid topology built, both legs solvated. Only kernel loading failed.
+
+### Cost incident to avoid repeating
+A pod was left running 2026-09-02 and found terminated on 2026-09-08. Whether
+it idled six days at $0.74/hr (~$107) or was killed earlier is unknown — the
+billing MCP tool returned `unknown tool get-billing`. **Terminate the pod at
+the end of every working block**, not only at the end of a task.
 - MM-GBSA or short-MD rescoring — the standard escalation once empirical
   scoring saturates around AUC 0.8.
 - Final write-up.

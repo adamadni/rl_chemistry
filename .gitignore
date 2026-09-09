@@ -4,3 +4,6 @@
 # Deliberately not committed - repo policy is code+metrics only - but these are
 # the ONLY copies outside RunPod volume e4akonl0eu. OneDrive provides offsite.
 checkpoints_backup/
+
+__pycache__/
+*.pyc
