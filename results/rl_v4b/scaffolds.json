@@ -1,0 +1,49 @@
+{
+ "threshold": 0.5,
+ "n_sampled": 5000,
+ "n_unique_high_reward": 5,
+ "n_scaffolds": 4,
+ "n_frameworks": 3,
+ "n_novel": 2,
+ "top_scaffold_share": 0.4,
+ "top_framework_share": 0.4,
+ "frameworks": [
+  {
+   "framework": "C1CCC(CC2CCC3C(CCC3CCC3CCCCC3)C2)CC1",
+   "count": 2
+  },
+  {
+   "framework": "CC(CC1CCCC1)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1",
+   "count": 2
+  },
+  {
+   "framework": "CC(CC1CCCCC1)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1",
+   "count": 1
+  }
+ ],
+ "scaffolds": [
+  {
+   "scaffold": "C(=Cc1n[nH]c2cc(Sc3ccccc3)ccc12)c1ccccn1",
+   "count": 2
+  },
+  {
+   "scaffold": "O=C(Nc1ccccn1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1nccs1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1nn[nH]n1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  }
+ ],
+ "molecules": [
+  "CC(C)NC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "NNC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1ccccn1)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1nccs1)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1nn[nH]n1)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1"
+ ]
+}

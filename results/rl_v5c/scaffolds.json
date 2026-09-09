@@ -1,0 +1,93 @@
+{
+ "threshold": 0.5,
+ "n_sampled": 5000,
+ "n_unique_high_reward": 9,
+ "n_scaffolds": 9,
+ "n_frameworks": 8,
+ "n_novel": 6,
+ "top_scaffold_share": 0.1111111111111111,
+ "top_framework_share": 0.2222222222222222,
+ "frameworks": [
+  {
+   "framework": "CC(CC1CCCCC1)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1",
+   "count": 2
+  },
+  {
+   "framework": "C1CCC(CC2CCC3C(CCC3CCC3CCCCC3)C2)CC1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CC1CCC2CC(C3CCCCC3)CCC2C1)C1CC1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CC1CC1)CC1CCC2CC(C3CCCCC3)CCC2C1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CCC(C)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1)C1CCCCC1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CCC1CCCCC1)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CC1CCCCC1)C1CCCCC1",
+   "count": 1
+  },
+  {
+   "framework": "CC(CC1CCC2CCCC2C1)C1CCCCC1CC1CCC2C(CCC2CCC2CCCCC2)C1",
+   "count": 1
+  }
+ ],
+ "scaffolds": [
+  {
+   "scaffold": "C(=Cc1n[nH]c2cc(Sc3ccccc3)ccc12)c1ccccn1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1cc2ccc(-c3ccccc3)cc2cn1)C1CC1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1cc2ccc(-c3ccccc3)cc2cn1)NC1CC1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(NCC(=O)N1CCCCC1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(NCc1ccccc1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1ccccc1)c1ccccc1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1ccc2c(c1)OCO2)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1ccccc1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  },
+  {
+   "scaffold": "O=C(Nc1cccnc1)c1ccccc1Sc1ccc2c(C=Cc3ccccn3)n[nH]c2c1",
+   "count": 1
+  }
+ ],
+ "molecules": [
+  "CC(C)CCNC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "COc1cccc(C#N)c1-c1ccc2cc(NC(=O)C3CC3)ncc2c1",
+  "Cc1ccc(F)cc1-c1ccc2cc(NC(=O)NC3CC3)ncc2c1",
+  "O=C(NCC(=O)N1CCCCC1)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(NCc1ccccc1)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1ccc(Br)cc1)c1ccc(OC(F)(F)F)cc1",
+  "O=C(Nc1ccc2c(c1)OCO2)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1ccccc1F)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+  "O=C(Nc1cccnc1F)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1"
+ ]
+}

@@ -1,0 +1,167 @@
+[
+ {
+  "ligand": "nilotinib",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 15,
+  "polar_residues": [
+   258,
+   318,
+   319,
+   321
+  ],
+  "key": {
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Thr315"
+  ]
+ },
+ {
+  "ligand": "imatinib",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 24,
+  "polar_residues": [
+   252
+  ],
+  "key": {},
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Met318",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "dasatinib",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 21,
+  "polar_residues": [
+   315,
+   318
+  ],
+  "key": {
+   "Thr315": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand1",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 16,
+  "polar_residues": [
+   315
+  ],
+  "key": {
+   "Thr315": [
+    "sidechain"
+   ]
+  },
+  "key_contact_only": [
+   "Glu286",
+   "Met318",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand2",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 23,
+  "polar_residues": [
+   315,
+   318
+  ],
+  "key": {
+   "Thr315": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand3",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 23,
+  "polar_residues": [
+   318,
+   322
+  ],
+  "key": {
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand4",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 17,
+  "polar_residues": [
+   247,
+   248,
+   318
+  ],
+  "key": {
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315"
+  ]
+ },
+ {
+  "ligand": "cand5",
+  "receptor": "2GQG",
+  "seed": 42,
+  "n_residues_contacted": 23,
+  "polar_residues": [
+   248,
+   249,
+   251,
+   252,
+   253,
+   322
+  ],
+  "key": {},
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Met318"
+  ]
+ }
+]

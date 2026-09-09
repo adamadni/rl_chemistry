@@ -1,0 +1,63 @@
+{
+ "1IEP": {
+  "ligand": "STI",
+  "chain": "A",
+  "center": [
+   15.614,
+   53.38,
+   15.455
+  ],
+  "size": [
+   20.7,
+   28.7,
+   25.5
+  ]
+ },
+ "2GQG": {
+  "ligand": "1N1",
+  "chain": "A",
+  "center": [
+   44.6,
+   79.757,
+   39.599
+  ],
+  "size": [
+   26.2,
+   23.3,
+   21.9
+  ]
+ },
+ "3CS9": {
+  "ligand": "NIL",
+  "chain": "A",
+  "center": [
+   28.086,
+   2.502,
+   52.071
+  ],
+  "size": [
+   28.1,
+   22.7,
+   20.4
+  ]
+ },
+ "AF": {
+  "ligand": null,
+  "chain": "A",
+  "center": [
+   15.614,
+   53.38,
+   15.455
+  ],
+  "size": [
+   20.7,
+   28.7,
+   25.5
+  ],
+  "aligned_on": "1IEP",
+  "n_ca_aligned": 254,
+  "ca_rmsd": 4.996,
+  "mean_plddt_full": 64.7,
+  "mean_plddt_kinase_domain": 92.6
+ }
+}

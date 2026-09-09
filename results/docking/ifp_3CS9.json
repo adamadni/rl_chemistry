@@ -1,0 +1,194 @@
+[
+ {
+  "ligand": "nilotinib",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 26,
+  "polar_residues": [
+   286,
+   315,
+   318,
+   381
+  ],
+  "key": {
+   "Glu286": [
+    "sidechain"
+   ],
+   "Thr315": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ],
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271"
+  ]
+ },
+ {
+  "ligand": "imatinib",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 22,
+  "polar_residues": [
+   286,
+   315,
+   318,
+   381
+  ],
+  "key": {
+   "Glu286": [
+    "sidechain"
+   ],
+   "Thr315": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ],
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271"
+  ]
+ },
+ {
+  "ligand": "dasatinib",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 20,
+  "polar_residues": [
+   286,
+   381
+  ],
+  "key": {
+   "Glu286": [
+    "sidechain"
+   ],
+   "Asp381": [
+    "backbone",
+    "sidechain"
+   ]
+  },
+  "key_contact_only": [
+   "Thr315",
+   "Met318"
+  ]
+ },
+ {
+  "ligand": "cand1",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 19,
+  "polar_residues": [
+   286,
+   318,
+   381
+  ],
+  "key": {
+   "Glu286": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ],
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Thr315"
+  ]
+ },
+ {
+  "ligand": "cand2",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 13,
+  "polar_residues": [
+   282,
+   381
+  ],
+  "key": {
+   "Asp381": [
+    "sidechain"
+   ]
+  },
+  "key_contact_only": []
+ },
+ {
+  "ligand": "cand3",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 22,
+  "polar_residues": [
+   253,
+   318
+  ],
+  "key": {
+   "Met318": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Asp381"
+  ]
+ },
+ {
+  "ligand": "cand4",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 22,
+  "polar_residues": [
+   286,
+   316,
+   318,
+   381
+  ],
+  "key": {
+   "Glu286": [
+    "sidechain"
+   ],
+   "Met318": [
+    "backbone"
+   ],
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Thr315"
+  ]
+ },
+ {
+  "ligand": "cand5",
+  "receptor": "3CS9",
+  "seed": 42,
+  "n_residues_contacted": 28,
+  "polar_residues": [
+   253,
+   381
+  ],
+  "key": {
+   "Asp381": [
+    "backbone"
+   ]
+  },
+  "key_contact_only": [
+   "Lys271",
+   "Glu286",
+   "Thr315",
+   "Met318"
+  ]
+ }
+]

@@ -1,0 +1,177 @@
+{
+ "receptors": {
+  "1IEP": {
+   "ligand": "STI",
+   "chain": "A",
+   "center": [
+    15.614,
+    53.38,
+    15.455
+   ],
+   "size": [
+    20.7,
+    28.7,
+    25.5
+   ]
+  },
+  "2GQG": {
+   "ligand": "1N1",
+   "chain": "A",
+   "center": [
+    44.6,
+    79.757,
+    39.599
+   ],
+   "size": [
+    26.2,
+    23.3,
+    21.9
+   ]
+  },
+  "3CS9": {
+   "ligand": "NIL",
+   "chain": "A",
+   "center": [
+    28.086,
+    2.502,
+    52.071
+   ],
+   "size": [
+    28.1,
+    22.7,
+    20.4
+   ]
+  },
+  "AF": {
+   "ligand": null,
+   "chain": "A",
+   "center": [
+    15.614,
+    53.38,
+    15.455
+   ],
+   "size": [
+    20.7,
+    28.7,
+    25.5
+   ],
+   "aligned_on": "1IEP",
+   "n_ca_aligned": 254,
+   "ca_rmsd": 4.996,
+   "mean_plddt_full": 64.7,
+   "mean_plddt_kinase_domain": 92.6
+  }
+ },
+ "exhaustiveness": 16,
+ "ligands": [
+  {
+   "name": "imatinib",
+   "smiles": "Cc1ccc(NC(=O)c2ccc(CN3CCN(C)CC3)cc2)cc1Nc1nccc(-c2cccnc2)n1",
+   "class": "known_active",
+   "scores": {
+    "1IEP": -10.0,
+    "3CS9": -12.1,
+    "2GQG": -10.5,
+    "AF": -9.3
+   },
+   "best": -12.1,
+   "best_receptor": "3CS9"
+  },
+  {
+   "name": "dasatinib",
+   "smiles": "Cc1nc(Nc2ncc(C(=O)Nc3c(C)cccc3Cl)s2)cc(N2CCN(CCO)CC2)n1",
+   "class": "known_active",
+   "scores": {
+    "1IEP": -9.6,
+    "3CS9": -8.7,
+    "2GQG": -11.3,
+    "AF": -9.5
+   },
+   "best": -11.3,
+   "best_receptor": "2GQG"
+  },
+  {
+   "name": "nilotinib",
+   "smiles": "Cc1cn(-c2cc(NC(=O)c3ccc(C)c(Nc4nccc(-c5cccnc5)n4)c3)cc(C(F)(F)F)c2)cn1",
+   "class": "known_active",
+   "scores": {
+    "1IEP": -13.5,
+    "3CS9": -13.5,
+    "2GQG": -10.9,
+    "AF": -10.2
+   },
+   "best": -13.5,
+   "best_receptor": "1IEP"
+  },
+  {
+   "name": "CHEMBL550623",
+   "smiles": "CNc1ncnc2c1ncn2CCc1cc(NC(=O)c2cccc(C(F)(F)F)c2)ccc1C",
+   "class": "measured_negative",
+   "pchembl": 4.02,
+   "scores": {
+    "1IEP": -11.1,
+    "3CS9": -11.5,
+    "2GQG": -11.8,
+    "AF": -10.2
+   },
+   "best": -11.8,
+   "best_receptor": "2GQG"
+  },
+  {
+   "name": "CHEMBL3967164",
+   "smiles": "O=C(NNc1nc2c(cnn2-c2ccccc2)c(=O)n1-c1ccccc1)c1ccc(Cl)cc1",
+   "class": "measured_negative",
+   "pchembl": 4.18,
+   "scores": {
+    "1IEP": -9.7,
+    "3CS9": -10.6,
+    "2GQG": -10.4,
+    "AF": -10.3
+   },
+   "best": -10.6,
+   "best_receptor": "3CS9"
+  },
+  {
+   "name": "CHEMBL3218002",
+   "smiles": "C#Cc1cccc(Nc2ncnc3ccc(S(=O)(=O)n4ccc(/C=C/C(=O)NO)c4)cc23)c1",
+   "class": "measured_negative",
+   "pchembl": 4.57,
+   "scores": {
+    "1IEP": -9.1,
+    "3CS9": -9.5,
+    "2GQG": -11.6,
+    "AF": -10.0
+   },
+   "best": -11.6,
+   "best_receptor": "2GQG"
+  },
+  {
+   "name": "CHEMBL3954137",
+   "smiles": "COc1ccc(-c2nnc3n(-c4ccccc4)c(=O)c4cnn(-c5ccccc5)c4n23)cc1",
+   "class": "measured_negative",
+   "pchembl": 4.72,
+   "scores": {
+    "1IEP": -8.2,
+    "3CS9": -8.9,
+    "2GQG": -7.6,
+    "AF": -8.0
+   },
+   "best": -8.9,
+   "best_receptor": "3CS9"
+  },
+  {
+   "name": "CHEMBL6032245",
+   "smiles": "NCCNC(=O)c1cccc(-c2ccc3c(c2)C(=O)Nc2cc(OC(F)(F)F)ccc2N3)c1",
+   "class": "measured_negative",
+   "pchembl": 4.78,
+   "scores": {
+    "1IEP": -11.5,
+    "3CS9": -12.4,
+    "2GQG": -11.1,
+    "AF": -9.5
+   },
+   "best": -12.4,
+   "best_receptor": "3CS9"
+  }
+ ]
+}

@@ -22,6 +22,7 @@ sys.path.insert(0, "/workspace/rl_chemistry/src")
 from eval_policy import load, sample
 from reward_model import RewardModel
 from train_rl import scaffold_of, ADReference, DATA, CKPT
+from diversity_filter import scaffold_key
 from smiles_utils import canonicalize
 from rdkit import RDLogger
 RDLogger.DisableLog("rdApp.*")
@@ -45,11 +46,18 @@ if __name__ == "__main__":
     abl_set = {d["smiles"] for d in json.load(open(f"{DATA}/abl1_qsar.json"))}
     hi = sorted({valid[i] for i in range(len(valid)) if sc["p_active"][i] >= args.threshold})
     scaf = collections.Counter(scaffold_of(x) for x in hi)
+    # Murcko keeps ring identity, so phenyl / 2-pyridyl / 3-pyridyl variants of
+    # one core count as three scaffolds -- which is why v3's "33 scaffolds"
+    # overstates its real chemotype count. The generic framework (all atoms ->
+    # C, all bonds -> single) merges those, and is the key the diversity filter
+    # buckets on, so it is the number that actually has to move.
+    gen = collections.Counter(scaffold_key(x, "generic") for x in hi)
     novel = [x for x in hi if x not in abl_set and x not in train_set]
     mt = ad.max_tanimoto(hi, [True] * len(hi)) if hi else np.zeros(0)
     print(f"\n=== high-reward set: P(active) >= {args.threshold} ===")
     print(f"  unique molecules                  {len(hi)}")
     print(f"  unique Bemis-Murcko scaffolds     {len(scaf)}")
+    print(f"  unique generic frameworks         {len(gen)}   (ring-heteroatom variants merged)")
     print(f"  already in ABL1 activity set      {sum(1 for x in hi if x in abl_set)}/{len(hi)}")
     print(f"  already in ChEMBL pretraining set {sum(1 for x in hi if x in train_set)}/{len(hi)}")
     print(f"  NOVEL (in neither)                {len(novel)}/{len(hi)}")
@@ -58,15 +66,21 @@ if __name__ == "__main__":
               f"min {mt.min():.3f} max {mt.max():.3f}")
     top = scaf.most_common(args.top)
     dominant = top[0][1] / max(1, len(hi)) if top else 0
+    gtop = gen.most_common(1)
+    gdominant = gtop[0][1] / max(1, len(hi)) if gtop else 0
     print(f"\n  scaffold concentration: top scaffold covers {100*dominant:.0f}% of the high-reward set")
+    print(f"  framework concentration: top framework covers {100*gdominant:.0f}%  <- the honest number")
     print(f"\n  {'count':>6}  scaffold")
     for sm, c in top:
         print(f"  {c:>6}  {sm}")
     if args.out:
         json.dump({"threshold": args.threshold, "n_sampled": args.n,
                    "n_unique_high_reward": len(hi), "n_scaffolds": len(scaf),
+                   "n_frameworks": len(gen),
                    "n_novel": len(novel),
                    "top_scaffold_share": float(dominant),
+                   "top_framework_share": float(gdominant),
+                   "frameworks": [{"framework": s, "count": c} for s, c in gen.most_common()],
                    "scaffolds": [{"scaffold": s, "count": c} for s, c in scaf.most_common()],
                    "molecules": hi}, open(args.out, "w"), indent=1)
         print(f"\nwrote {args.out}")

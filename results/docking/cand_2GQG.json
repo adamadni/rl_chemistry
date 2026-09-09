@@ -1,0 +1,137 @@
+{
+ "receptor": "2GQG",
+ "box": {
+  "ligand": "1N1",
+  "chain": "A",
+  "center": [
+   44.6,
+   79.757,
+   39.599
+  ],
+  "size": [
+   26.2,
+   23.3,
+   21.9
+  ]
+ },
+ "ph": 7.4,
+ "exhaustiveness": 8,
+ "ligands": [
+  {
+   "name": "cand1",
+   "smiles": "Cc1cc(NC(=O)C2CC2)ncc1-c1ccc2cc(NC(=O)C3CC3)ncc2c1",
+   "class": "generated_candidate",
+   "pchembl": null,
+   "heavy": 29,
+   "mw": 386.45500000000015,
+   "logp": 4.302220000000003,
+   "p_active": 1.0,
+   "smiles_protonated": "Cc1cc(NC(=O)C2CC2)ncc1-c1ccc2cc(NC(=O)C3CC3)ncc2c1",
+   "dock": {
+    "affinity": -8.34,
+    "cnn_score": 0.6108,
+    "cnn_affinity": 7.027
+   }
+  },
+  {
+   "name": "cand2",
+   "smiles": "Cc1ccc(-c2cc(C(=O)Nc3ccc(OC(F)(F)Cl)cc3)cnc2N2CCNCC2)cc1",
+   "class": "generated_candidate",
+   "pchembl": null,
+   "heavy": 33,
+   "mw": 472.9230000000002,
+   "logp": 4.886820000000003,
+   "p_active": 0.9848393201828003,
+   "smiles_protonated": "Cc1ccc(-c2cc(C(=O)Nc3ccc(OC(F)(F)Cl)cc3)cnc2N2CC[NH2+]CC2)cc1",
+   "dock": {
+    "affinity": -9.36,
+    "cnn_score": 0.57,
+    "cnn_affinity": 7.23
+   }
+  },
+  {
+   "name": "cand3",
+   "smiles": "Cc1ccc(F)cc1-c1ccc2cc(NC(=O)CC3CNCCN3C3COC3)ncc2c1",
+   "class": "generated_candidate",
+   "pchembl": null,
+   "heavy": 32,
+   "mw": 434.51500000000027,
+   "logp": 3.350520000000002,
+   "p_active": 0.8633890748023987,
+   "smiles_protonated": "Cc1ccc(F)cc1-c1ccc2cc(NC(=O)CC3C[NH2+]CC[NH+]3C3COC3)ncc2c1",
+   "dock": {
+    "affinity": -11.01,
+    "cnn_score": 0.9091,
+    "cnn_affinity": 7.417
+   }
+  },
+  {
+   "name": "cand4",
+   "smiles": "CNC(=O)NC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1",
+   "class": "generated_candidate",
+   "pchembl": null,
+   "heavy": 31,
+   "mw": 429.5050000000001,
+   "logp": 4.348700000000003,
+   "p_active": 0.8180000185966492,
+   "smiles_protonated": "CNC(=O)NC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[n-]c2c1",
+   "dock": {
+    "affinity": -11.02,
+    "cnn_score": 0.9045,
+    "cnn_affinity": 7.625
+   }
+  },
+  {
+   "name": "cand5",
+   "smiles": "Cc1ccc(CC(=O)N2CCN(CC(N)=O)CC2)cc1-c1ccc2cc(NC(=O)C3CC3(C)C)ncc2c1",
+   "class": "generated_candidate",
+   "pchembl": null,
+   "heavy": 38,
+   "mw": 513.6420000000003,
+   "logp": 3.3668200000000015,
+   "p_active": 0.8140000104904175,
+   "smiles_protonated": "Cc1ccc(CC(=O)[NH+]2CCN(CC(N)=O)CC2)cc1-c1ccc2cc(NC(=O)C3CC3(C)C)ncc2c1",
+   "dock": {
+    "affinity": -10.9,
+    "cnn_score": 0.7149,
+    "cnn_affinity": 7.726
+   }
+  },
+  {
+   "name": "imatinib",
+   "smiles": "Cc1ccc(NC(=O)c2ccc(CN3CCN(C)CC3)cc2)cc1Nc1nccc(-c2cccnc2)n1",
+   "class": "reference_drug",
+   "pchembl": null,
+   "smiles_protonated": "Cc1ccc(NC(=O)c2ccc(CN3CC[NH+](C)CC3)cc2)cc1Nc1nccc(-c2cccnc2)n1",
+   "dock": {
+    "affinity": -7.96,
+    "cnn_score": 0.3591,
+    "cnn_affinity": 7.715
+   }
+  },
+  {
+   "name": "dasatinib",
+   "smiles": "Cc1nc(Nc2ncc(C(=O)Nc3c(C)cccc3Cl)s2)cc(N2CCN(CCO)CC2)n1",
+   "class": "reference_drug",
+   "pchembl": null,
+   "smiles_protonated": "Cc1nc(Nc2ncc(C(=O)Nc3c(C)cccc3Cl)s2)cc(N2CCN(CCO)CC2)n1",
+   "dock": {
+    "affinity": -10.17,
+    "cnn_score": 0.9849,
+    "cnn_affinity": 8.055
+   }
+  },
+  {
+   "name": "nilotinib",
+   "smiles": "Cc1cn(-c2cc(NC(=O)c3ccc(C)c(Nc4nccc(-c5cccnc5)n4)c3)cc(C(F)(F)F)c2)cn1",
+   "class": "reference_drug",
+   "pchembl": null,
+   "smiles_protonated": "Cc1cn(-c2cc(NC(=O)c3ccc(C)c(Nc4nccc(-c5cccnc5)n4)c3)cc(C(F)(F)F)c2)cn1",
+   "dock": {
+    "affinity": -8.97,
+    "cnn_score": 0.5154,
+    "cnn_affinity": 7.67
+   }
+  }
+ ]
+}

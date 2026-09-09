@@ -116,6 +116,146 @@ fix: penalize/skip rewarding a molecule whose scaffold is already
 well-represented in the replay buffer, forcing the policy to look
 elsewhere for advantage.
 
+## v4 — diversity-filtered experience replay (RUN + ABLATED 2026-08-29)
+
+Implemented and ablated 2026-08-29 on pod `rl-chemistry-v4`, 3x5000 steps,
+~1.1 h wall clock (three runs concurrent; RDKit scoring is the bottleneck,
+GPU sat at 9%).
+
+### The baseline was wrong, and had to be recomputed first
+`results/rl_baseline_v3/scaffolds.json` reports 33 Murcko scaffolds / 58%
+top share. On the **generic-framework** key that the filter actually buckets
+on, v3 is **19 frameworks with the top one covering 77%** — Murcko was
+splitting phenyl/2-pyridyl/3-pyridyl variants of one core (67+10+8 = 85 of
+117 molecules) into three "distinct scaffolds". Recomputed baseline is in
+`results/rl_baseline_v3/scaffolds_framework.json`. Comparing v4 frameworks
+against v3 Murcko would have measured the metric change, not the model.
+
+### Results (n=5000, P(active)>=0.5 set; prior column for scale)
+| metric | prior | v3 | v4a filter | v4b replay | v4c both |
+|---|---|---|---|---|---|
+| unique high-reward molecules | - | 117 | **411** | 5 | 187 |
+| Murcko scaffolds | - | 32 | 359 | 4 | 161 |
+| **generic frameworks** | - | **19** | **231** | 3 | **138** |
+| **top framework share** | - | **77%** | **4%** | 40% | **7%** |
+| novel (of high-reward) | - | 98% | 97% | 40% | 92% |
+| P(active)>=0.5 | 0.10% | 5.7% | **11.4%** | 0.12% | 3.8% |
+| P(active)>=0.8 | 0.02% | 3.8% | **8.9%** | 0.00% | 1.8% |
+| valid% | 97.9 | 99.6 | 99.7 | 99.7 | 99.5 |
+| unique% | 100 | 96.0 | 93.3 | 99.3 | **99.1** |
+| overall scaffolds | 4321 | 2938 | 2753 | 2890 | **3073** |
+| mean RF uncertainty | 0.283 | 0.223 | 0.199 | 0.237 | 0.224 |
+| **AD: top-decile within 0.3** | 83.0 | **94.4** | **45.2** | 93.4 | **94.4** |
+
+### Read this before quoting the v4a numbers
+**v4a's diversity and potency gains are partly extrapolation.** Its
+applicability-domain coverage halved (94.4% -> 45.2%); the high-reward set's
+mean max-Tanimoto to train fell 0.459 -> 0.330 with a minimum of 0.252,
+i.e. below the AD radius entirely. The RF-uncertainty penalty did **not**
+catch it — uncertainty went *down* (0.199). That is a known random-forest
+behaviour: tree agreement can stay high in regions the forest never saw, so
+low ensemble variance is not evidence of validity out of domain. Half of
+v4a's "better" molecules sit where the reward model has no standing to judge.
+
+**v4c is the defensible result.** 7.3x more frameworks (19 -> 138), top-share
+77% -> 7%, while holding AD coverage at *exactly* v3's 94.4%, uncertainty at
+v3's level (0.224 vs 0.223), improving overall scaffold count (3073 vs 2938)
+and uniqueness (99.1% vs 96.0%). The cost is potency: P>=0.5 falls 5.7% ->
+3.8%. That is the honest trade — ~34% of the hit rate for 7.3x the chemotype
+diversity, all of it inside the domain where the RF is trustworthy.
+
+### Why replay alone (v4b) destroyed the run — the tau latch, confirmed
+v4b was the only run without `--threshold-decay`, i.e. with v3's monotonic
+tau, and it is the predicted failure exactly:
+- A reward spike near step 1300 (unique% dipped to 64%) ratcheted tau up;
+  it reached **0.953 at step 2950 and could never come down**.
+- `pct_above_tau` was **0.0% for the entire last 1000 steps** — no molecule
+  could clear the bar, so advantage variance collapsed and the run stopped
+  learning. It did not look like collapse; the policy stayed 99% unique.
+- Meanwhile the replay likelihood term ran unopposed: `beta_kl` pinned at
+  its 20.0 ceiling for **798 steps** (v3: 14), losses swung -236 to +303,
+  valid% crashed to 53%.
+- Final: **P>=0.5 = 0.12% against the pretrained prior's own 0.10%**, and
+  mean p_active 0.068 *below* the prior's 0.098. Worse than no RL at all.
+- Replay barely functioned alone: 598 molecules admitted of 625,269 offered
+  (0.1%), buffer 524 molecules over 262 scaffolds. In v4c the same buffer
+  holds 1000 molecules over **1000 distinct scaffolds**, one per scaffold.
+
+### The mechanism worth remembering
+Replay alone is destructive; the filter alone drifts out of domain; together
+they are complementary. The filter *pushes* the policy off the mined
+chemotype, and the scaffold-stratified buffer *anchors* it to molecules
+actually observed to score well — which is what keeps v4c inside the
+applicability domain (94.4%) while v4a, with the same push and no anchor,
+falls to 45.2%. The buffer is not mainly a sample-efficiency device here;
+it is the thing that stops the diversity filter from wandering into
+chemistry the reward model cannot evaluate.
+
+Stability note: the filter *improved* optimisation stability rather than
+harming it. v4a/v4c minimum unique% was 56.7% vs v3's 21.3%, minimum valid%
+93.8/91.4 vs 82.0, and neither hit the beta_kl ceiling once (v3: 14 steps).
+Removing the single dominant reward hill removed the pressure that was
+driving v3 toward collapse.
+
+- `src/diversity_filter.py` — per-scaffold occupancy memory. Reward
+  multiplier `clamp(1 - count[key]/bucket_size, 0, 1)`, applied to the
+  positive part of reward only.
+- `src/replay_buffer.py` — scaffold-capped memory of high-reward molecules
+  plus a char-level `encode()` (inverse of the sampler's decode).
+- `src/train_rl.py` — both wired in behind `--diversity-filter` / `--replay`,
+  **default off**, so the v3 command above still reproduces v3 exactly.
+- `src/analyze_scaffolds.py` — now also reports generic-framework counts.
+
+Three design calls that are the substance of the component (all three were
+load-bearing in the results above):
+
+1. **The filter keys on the generic framework, not the Murcko scaffold.**
+   v3's top three "distinct" scaffolds are phenyl / 2-pyridyl / 3-pyridyl
+   on one core. A Murcko-keyed filter is evadable by moving one ring
+   nitrogen, and would make the headline metric improve while nothing
+   chemically changed. `MakeScaffoldGeneric` merges them.
+   **This also means v3's "33 scaffolds / 58% top share" is not the real
+   baseline** — the generic-framework numbers for v3 have to be recomputed
+   before any comparison, and they will look considerably worse.
+2. **Filtered reward decays to 0.0, not to a floor.** Reward here is
+   deliberately unclipped (prior samples sit near -0.17, invalid at -1.0),
+   so REINVENT's score->0 convention would *promote* a filtered molecule
+   above ordinary chemistry.
+3. **Replay is an auxiliary per-token likelihood term, not extra PPO data.**
+   Stale `logP_old` breaks the importance ratio; recomputing it makes
+   ratio==1 and silently reverts to the uncapped REINFORCE step that
+   collapsed v1.
+
+### Risks predicted before the run — outcome
+- **tau latch** — predicted as most likely failure. **Happened, in v4b,
+  the one run without `--threshold-decay`.** Always set it when the filter
+  or replay is on. Watch `tau` vs `reward_eff_mean` and `pct_above_tau`.
+- **Replay as a collapse driver** — confirmed. Alone it pinned beta_kl at
+  the ceiling for 798 steps and crashed valid% to 53%. Safe only alongside
+  the filter, which keeps the buffer scaffold-diverse.
+- **Filter too aggressive** — did *not* happen at `--df-bucket-size 25`;
+  potency went up (v4a) or fell modestly (v4c). The real cost showed up
+  somewhere unpredicted: **applicability domain, not potency** (v4a).
+- `reward_raw_mean` vs `reward_eff_mean` logging was necessary — the gap
+  between them is the only way to tell the filter working from the policy
+  degrading.
+
+### Ablation matrix (all vs. v3, 5000 steps each) — as run
+| run | flags |
+|---|---|
+| v3 (baseline, re-eval on framework key) | *(none)* |
+| v4a filter only | `--diversity-filter --threshold-decay 0.1` |
+| v4b replay only | `--replay` *(no decay — this is why it failed)* |
+| v4c both | `--diversity-filter --replay --threshold-decay 0.1` |
+
+    nohup python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
+      --beta-kl 0.02 --target-kl 3.0 --ppo-epochs 4 --clip-eps 0.2 \
+      --lambda-unc 1.0 --threshold-update-every 50 \
+      --diversity-filter --df-bucket-size 25 --df-mode generic \
+      --replay --replay-coef 0.05 --replay-k 24 \
+      --threshold-decay 0.1 \
+      --out checkpoints/rl_v4c > logs/rl_v4c.log 2>&1 &
+
 ## How to run / reproduce
     # training (detached; ~39 min for 5000 steps on the 4090)
     nohup python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
@@ -129,19 +269,480 @@ Watch during a run: `unique_pct` + `scaffold_ratio` (collapse signal),
 `pct_above_tau` and `p_act` (learning signal). Per-step metrics land in
 `<out>/history.json`, eval summary in `<out>/eval.json`.
 
-## Not started
-- **Experience replay with a diversity filter** — next component, and the
-  direct fix for the narrow high-reward tail (28 scaffolds among P>=0.5).
-- Transfer learning on own high-reward outputs (3rd paper component).
+## v5 — transfer learning + the complete 2^3 factorial (2026-08-29)
+
+`transfer_phase()` in train_rl.py implements paper component 1: every
+`--tl-every` steps the RL objective is suspended and the policy runs pure MLE
+on a scaffold-diverse slice of the replay buffer (`ReplayBuffer.sample_diverse`,
+round-robin over scaffolds so truncation costs breadth last). It shares the
+buffer with the replay term but is a different mechanism — replay is an
+auxiliary loss inside every update, permanently bounded by the PPO surrogate
+it competes with; a TL phase has no RL objective present at all. That makes it
+better at consolidating a rare chemotype and by far the most dangerous of the
+three, since nothing inside an MLE phase bounds how far the policy moves.
+Guards: smaller `--tl-lr`; a deduplicated scaffold-diverse training set; and
+**a KL-to-prior tripwire after every epoch** (`--tl-max-kl`) that aborts the
+phase mid-way. The tripwire is the load-bearing one — without it the adaptive
+beta_kl controller only sees the damage on the *next* rollout, after the phase
+has finished moving the policy. Over 31 phases across four runs it fired once.
+
+### Full factorial, n=5000. F = diversity filter, R = replay, T = transfer learning
+| run | FRT | frameworks | top fw | hi-reward mols | P>=.5 | P>=.8 | valid | uniq | scaffolds | unc | AD% |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v3   | `---` | 19 | 77% | 118 | 5.72 | 3.76 | 99.58 | 96.00 | 2938 | 0.223 | 94.4 |
+| v4a  | `F--` | 231 | 4% | 411 | 11.36 | **8.89** | 99.66 | 93.34 | 2753 | 0.199 | **45.2** |
+| v4b  | `-R-`* | 3 | 40% | 5 | 0.12 | 0.00 | 99.68 | 99.28 | 2890 | 0.237 | 93.4 |
+| v4b2 | `-R-` | 7 | 14% | 7 | 0.10 | 0.04 | 99.68 | 99.68 | 3202 | 0.241 | 93.6 |
+| v5a  | `--T` | 19 | 47% | 77 | 5.66 | 3.91 | 99.68 | 90.33 | 2105 | 0.192 | 97.0 |
+| v4c  | `FR-` | 138 | 7% | 187 | 3.76 | 1.79 | 99.54 | 99.08 | 3073 | 0.224 | 94.4 |
+| v5b  | `F-T` | 192 | 7% | 271 | 5.94 | 2.87 | 99.72 | 97.69 | 2801 | 0.210 | 96.6 |
+| v5c  | `-RT` | 8 | 22% | 9 | 0.10 | 0.00 | 99.62 | 99.50 | 3101 | 0.243 | 93.4 |
+| **v5d** | **`FRT`** | **333** | **10%** | **589** | **14.92** | 6.96 | **99.76** | 93.46 | 2542 | 0.215 | **99.8** |
+
+\* v4b ran with monotonic tau (no `--threshold-decay`); v4b2 is the corrected re-run.
+
+### What the factorial actually shows
+1. **The diversity filter is the only component that produces learning +
+   diversity on its own.** Every cell containing F reaches P>=0.5 of 3.8–14.9%
+   and 138–333 frameworks. Every cell without F either fails to learn at all
+   (any cell with R and no F) or learns v3-like potency with v3-like narrowness
+   (v5a: 19 frameworks, 47% top share).
+2. **Replay alone does not work, and the tau latch was not the reason.**
+   This corrects the v4 write-up. v4b2 fixes the monotonic-tau confound and
+   still reaches P>=0.5 = **0.10%**, against the pretrained prior's own ~0.10%.
+   Replay is a *consolidation* mechanism: it re-presents molecules already
+   found to be good, so with nothing generating those molecules it has nothing
+   to consolidate and cannot bootstrap. Admission needs raw reward >= 0.4, and
+   a run that never gets there never fills the buffer. v5c (`-RT`) confirms it:
+   two consolidation mechanisms together, still 0.10%.
+3. **All three together are superadditive, not merely additive.** v5d beats
+   the best single component on diversity (333 vs 231 frameworks) *and* on
+   potency (14.9% vs 11.4%) *and* fixes v4a's applicability-domain collapse
+   outright (**99.8% vs 45.2%**, the highest AD of any run including v3).
+4. **The AD story resolves cleanly.** F alone drifts out of domain (45.2%).
+   Adding either memory mechanism repairs it — R (94.4%), T (96.6%), both
+   (99.8%). This confirms the push/anchor account: the filter pushes the
+   policy off the mined chemotype, and the buffer-backed mechanisms anchor it
+   to chemistry already observed to score well. Their value here is domain
+   tethering, not sample efficiency.
+
+**Final model: `checkpoints/rl_v5d/policy_latest.pt`.**
+
+## Candidate selection for docking
+`src/select_candidates.py` — 5 generated candidates + 5 measured negatives,
+in `results/candidates_v5d.json`. Not docked; selection only.
+
+Two methodology notes that changed the output materially:
+- **Negatives are size-matched on heavy-atom count** (candidates mean 32.6,
+  all five negatives at 33). Docking scores are extensive in molecular size,
+  so unmatched negatives would manufacture a positive result from arithmetic.
+  They are measured-inactive ABL1 compounds (pChEMBL 4.02–4.78) rather than
+  random or unmeasured decoys.
+- **A framework count is a good aggregate statistic and a bad selection
+  criterion.** The first run picked five "distinct framework" molecules that
+  were all one chemotype, differing only in an amide substituent that happened
+  to be cyclic — Murcko pulls substituent rings into the scaffold, so each got
+  its own framework while the binding core was identical. At n=5 the metric is
+  trivially gamed by decorating one core with different small rings. Fixed by
+  adding a pairwise ECFP4 Tanimoto ceiling (`--max-sim 0.45`) on top.
+
+## Docking (2026-08-30) — protocol validated, candidates INCOMPLETE
+
+Tooling: smina (first pass), then **gnina v1.3.3** (Vina search + CNN
+rescoring) on the pod; ligands 3D-embedded with ETKDG/MMFF and protonated at
+**pH 7.4** with Dimorphite-DL (verified: dasatinib piperazine -> [NH+],
+aspirin acid -> [O-]). `src/prep_receptors.py`, `src/build_benchmark.py`,
+`src/run_docking.py`, `src/run_benchmark_docking.py`, `src/analyze_docking.py`.
+
+### Receptor ensemble, and the AlphaFold finding
+ABL1 inhibitors split by required conformation: type I (dasatinib) needs
+DFG-in, type II (imatinib, nilotinib) needs DFG-out, whose allosteric back
+pocket does not exist in DFG-in. Ensemble = 1IEP (imatinib, DFG-out), 3CS9
+(nilotinib, DFG-out), 2GQG (dasatinib, DFG-in), AF-P00519 v6 (AlphaFold).
+
+**The AlphaFold model is DFG-in.** Geometric test (DFG-Phe382 to alphaC-Glu286
+and to Lys271):
+
+    structure                    F382-E286  F382-K271   conformation
+    1IEP  (imatinib)                 13.91      10.86   DFG-out
+    3CS9  (nilotinib)                13.84      11.12   DFG-out
+    2GQG  (dasatinib)                 8.78      14.04   DFG-in
+    AlphaFold                         9.63      13.38   DFG-in
+
+Kinase domain (242-495) excised from the 1130-residue model first: full-length
+mean pLDDT is 64.7 with 49% of residues "very low", but the kinase domain
+alone is **92.6**. CA-RMSD to 1IEP decomposes as whole domain 5.00 A,
+N-lobe+hinge 2.07 A, post-A-loop 2.03 A — **the fold is right and essentially
+all the error is in the activation loop / DFG region**, i.e. precisely what
+governs type-II binding.
+
+Confirmed independently by the known drugs (smina, exhaustiveness 16): the
+penalty for docking against AlphaFold rather than the best crystal was
+imatinib **+2.80**, nilotinib **+3.30** (both type II) vs dasatinib **+1.80**
+(type I).
+
+### Enrichment: 40 actives vs 40 property-matched inactives
+`src/build_benchmark.py` — actives pChEMBL 9.70-10.82 drawn one per
+Bemis-Murcko scaffold (40 distinct, controls analogue bias); inactives 4.21-
+5.50 greedily 1:1 matched on heavy atoms. Residual imbalance **0.00 heavy
+atoms, 0.03 logP** — docking scores are extensive in molecular size, so
+without this the enrichment would be arithmetic rather than chemistry.
+
+    scheme                       AUC    95% CI          EF10%
+    affinity @ 1IEP  (DFG-out)  0.764  [0.652, 0.871]   1.50
+    affinity @ 2GQG  (DFG-in)   0.698  [0.573, 0.816]   1.25
+    affinity @ ensemble         0.776  [0.666, 0.873]   1.50
+    CNNscore @ ensemble         0.783  [0.671, 0.884]   1.25
+    CNNaffinity @ 2GQG          0.786  [0.677, 0.877]   2.00
+
+Three conclusions:
+1. **Discrimination is real but modest** — every CI excludes 0.5, but AUC
+   tops out ~0.78. The earlier 5-negative control gave 0.733 on 15 pairs with
+   a CI of [0.40, 0.95]: uninterpretable, which is why it was expanded.
+2. **CNN rescoring did not help** (0.783 vs 0.776, indistinguishable). One of
+   the two proposed fixes simply did not deliver.
+3. **Docking is a WEAKER classifier than the QSAR RF already in hand**
+   (~0.78 vs scaffold-split 0.900). Its value is *independence* — structure-
+   based, different failure modes — not accuracy. Do not treat it as the more
+   authoritative judge.
+4. **An AlphaFold-only protocol would have been useless**: AUC 0.400 on the
+   first control, i.e. worse than random, with actives and inactives separated
+   by 0.07 kcal/mol.
+
+### FINAL RESULT — 3-seed medians (`results/docking/multiseed_table.json`)
+**This supersedes the single-seed table below.** Each ligand docked with seeds
+{7, 42, 1234} against all three crystals; score = median over seeds of the
+best-over-crystals affinity.
+
+    seed-to-seed spread, all 88 ligands:
+      median 0.13   mean 0.35   90th pct 0.84   MAX 3.40 kcal/mol
+    benchmark: 40 actives median-mean -11.34 | 40 matched inactives -9.86
+
+    molecule    source          median  spread          range    %ile   RF P
+    nilotinib   marketed drug   -13.63    0.03  [-13.65,-13.62]  100%     -
+    imatinib    marketed drug   -12.81    0.12  [-12.86,-12.74]   90%     -
+    cand5       RL v5d          -12.64    0.60  [-12.76,-12.16]   90%   0.814
+    cand3       RL v5d          -12.05    0.51  [-12.13,-11.62]   75%   0.863
+    cand4       RL v5d          -10.98    0.62  [-11.60,-10.98]   32%   0.818
+    cand1       RL v5d          -10.51    0.02  [-10.51,-10.49]   22%   1.000
+    dasatinib   marketed drug   -10.32    0.14  [-10.42,-10.28]   15%     -
+    cand2       RL v5d           -9.27    0.04  [ -9.30, -9.26]    5%   0.985
+
+**CORRECTION: cand5 does NOT outscore imatinib.** The single-seed pass had
+cand5 at -12.97 vs imatinib -12.79 and reported cand5 as the better scorer.
+On 3-seed medians it is -12.64 vs -12.81, i.e. imatinib slightly ahead, and
+the 0.17 gap sits well inside the 0.72 combined seed spread. The two are
+**statistically indistinguishable**, and the earlier claim was single-draw
+noise. No candidate robustly outscores imatinib; cand3, cand4, cand1 and
+cand2 are all robustly worse (gaps 0.76-3.54 against combined spreads
+0.14-0.74).
+
+The set-level claim survives: candidate median-mean -11.09 against benchmark
+actives -11.34 and matched inactives -9.86. **The candidates sit with the
+drugs as a distribution, while no individual candidate beats imatinib.**
+
+Seed variance is strongly ligand-dependent and that is itself informative:
+the three marketed drugs are highly reproducible (spread 0.03-0.14) whereas
+cand3/4/5 scatter 0.51-0.62, i.e. the search finds materially different best
+poses for them run to run. One ligand in the set spread **3.40 kcal/mol**.
+Single-seed docking should not be trusted on this target.
+
+### Pose validation — `src/interaction_fingerprint.py`, `results/docking/ifp_*.json`
+A score is only worth as much as the pose it is attached to. Poses were checked
+against ABL1's known pharmacophore: hinge Met318, gatekeeper Thr315,
+alphaC Glu286, DFG Asp381, catalytic Lys271. (Polar contacts are heavy-atom
+distance only, no angle criterion, so the test is reliable for ABSENCE —
+"never approaches the hinge" — and only suggestive for presence.)
+
+    1IEP (DFG-out)   resid  Met318   Thr315   Glu286   Asp381
+    nilotinib           25  backbone sidechain sidechain backbone   <- type II
+    imatinib            24  backbone sidechain sidechain backbone   <- type II
+    dasatinib           18  -        sidechain sidechain backbone   <- NO HINGE
+    cand5               25  backbone contact   sidechain backbone
+    cand4               24  backbone contact   sidechain backbone
+    cand3               23  backbone contact   contact   contact
+    cand1               22  contact  contact   sidechain backbone
+    cand2               14  -        -         -         contact    <- FAILS
+
+    2GQG (DFG-in)    resid  Met318   Thr315
+    dasatinib           21  backbone sidechain                      <- type I, correct
+    nilotinib           15  backbone contact                        <- loses back pocket
+
+**The protocol reproduces known biology.** Imatinib and nilotinib show the
+canonical type-II signature on both DFG-out structures — hinge backbone H-bond,
+gatekeeper, alphaC-Glu, DFG-Asp. Dasatinib shows type-I hinge binding on its own
+DFG-in structure and *loses the hinge contact entirely* on DFG-out. Nilotinib
+loses the back-pocket contacts on DFG-in. Both drugs behave exactly as their
+binding class predicts, which is the strongest available evidence that the
+pipeline is working rather than producing plausible-looking noise.
+
+**This explains dasatinib's 15th percentile, and exposes a scoring-scheme bug.**
+Dasatinib is a type-I binder; best-over-ensemble scoring rewards whichever
+receptor yields the most contacts, and DFG-out structures give larger, more
+enclosed pockets that flatter type-II-shaped ligands. So best-of-ensemble
+systematically under-serves type-I binders. **Ligands should be scored in the
+conformation their interaction fingerprint says they actually use, not by a
+blind maximum over receptors.**
+
+**Candidate verdicts (this supersedes the earlier "cand3/cand4" shortlist):**
+- **cand5, cand4** — reproduce the full imatinib/nilotinib type-II signature on
+  DFG-out (hinge backbone H-bond + gatekeeper + Glu286 + Asp381 backbone).
+  Best-supported of the five, and their scores rest on chemically sensible poses.
+- **cand3** — consistent hinge H-bond across all three crystals, weaker
+  back-pocket engagement.
+- **cand1** — RF's most confident molecule (P=1.000) but only a non-polar
+  approach to the hinge on 1IEP. Not supported.
+- **cand2** — RF P=0.985, yet 13-14 residues contacted and NO hinge, gatekeeper
+  or Glu286 contact on either DFG-out receptor. Docking score (5th percentile)
+  and pose agree it is not credible. **First clean agreement between the two
+  methods, and it is a rejection.**
+
+### Candidate SMILES (`results/candidates_v5d.json`)
+    cand1  Cc1cc(NC(=O)C2CC2)ncc1-c1ccc2cc(NC(=O)C3CC3)ncc2c1
+    cand2  Cc1ccc(-c2cc(C(=O)Nc3ccc(OC(F)(F)Cl)cc3)cnc2N2CCNCC2)cc1
+    cand3  Cc1ccc(F)cc1-c1ccc2cc(NC(=O)CC3CNCCN3C3COC3)ncc2c1
+    cand4  CNC(=O)NC(=O)c1ccccc1Sc1ccc2c(/C=C/c3ccccn3)n[nH]c2c1
+    cand5  Cc1ccc(CC(=O)N2CCN(CC(N)=O)CC2)cc1-c1ccc2cc(NC(=O)C3CC3(C)C)ncc2c1
+
+### Single-seed table (superseded, kept for the record) — `results/docking/final_table.json`
+All ligands docked in one run under an identical protocol, so imatinib is a
+like-for-like anchor rather than a literature value. Score = best over the
+three crystals; percentile is against the 40 known actives docked alongside.
+
+    benchmark, same protocol:  40 known actives   mean -11.28  [-13.18, -8.82]
+                               40 matched inactives mean -9.92  [-12.60, -5.77]
+
+    molecule    source          dock   %ile vs actives  CNNaff     AF   AFpen   RF P
+    nilotinib   marketed drug  -13.62       100%         8.869   -9.35  +4.27    -
+    cand5       RL v5d         -12.97        95%         8.427  -10.59  +2.38   0.814
+    imatinib    marketed drug  -12.79        92%         8.435   -8.03  +4.76    -
+    cand3       RL v5d         -12.10        80%         7.765   -8.62  +3.48   0.863
+    cand4       RL v5d         -11.39        50%         8.264   -7.77  +3.62   0.818
+    cand1       RL v5d         -10.51        22%         7.826   -7.89  +2.62   1.000
+    dasatinib   marketed drug  -10.32        12%         8.071   -9.33  +0.99    -
+    cand2       RL v5d          -9.30         2%         7.214   -3.66  +5.64   0.985
+
+- **The candidate set scores at the known-actives mean**: candidates mean
+  -11.25 vs actives -11.28 vs matched inactives -9.92. As a distribution they
+  land with the drugs, not the non-binders. That is the defensible claim.
+- **One candidate (cand5, -12.97) outscores imatinib (-12.79)**; two of five
+  sit above the 80th percentile of known actives. Do NOT read this as "cand5
+  is more potent than imatinib" — see the caveat below.
+- **dasatinib scores 12th percentile.** A marketed, sub-nanomolar ABL1 drug
+  lands near the bottom. This is the protocol's error bar made visible, and
+  the single best argument against over-reading any individual number.
+
+### The RF and docking disagree, and that is the point of the exercise
+Ranked by RF confidence the candidates are cand1 > cand2 > cand3 > cand4 >
+cand5; ranked by docking they are cand5 > cand3 > cand4 > cand1 > cand2 —
+close to exactly inverted. The RF's two most confident molecules
+(P=1.000, 0.985) dock at the 22nd and 2nd percentile; its least confident
+(P=0.814) docks at the 95th.
+
+Neither model is thereby proven wrong: the RF is the stronger classifier on
+its own benchmark (scaffold-split ROC-AUC 0.900 vs docking's 0.799), but it
+judges 2D fingerprint similarity to known ABL1 chemistry, while docking judges
+3D shape/chemical complementarity to a specific receptor conformation. They
+fail differently, which is exactly why an orthogonal check was worth running.
+The honest summary is that **no molecule here is corroborated by both methods
+simultaneously**, and the candidates worth prioritising experimentally are the
+ones that are at least not contradicted — cand3 and cand4, which sit mid-to-
+high on both.
+
+### Enrichment at exhaustiveness 16 (supersedes the exh-8 numbers)
+    affinity @ 3CS9      0.799  [0.686, 0.903]   EF10% 1.50
+    affinity @ ensemble  0.790  [0.680, 0.889]   EF10% 1.50
+    affinity @ 2GQG      0.779  [0.667, 0.877]   EF10% 1.75
+    affinity @ 1IEP      0.755  [0.641, 0.863]   EF10% 1.50
+    cnn_score @ ensemble 0.778  [0.665, 0.883]
+    cnn_affinity @ 2GQG  0.754  [0.640, 0.857]
+CNN rescoring again failed to beat plain Vina scoring (0.778 vs 0.790).
+
+### Search reliability — resolved, and why it mattered
+At exhaustiveness 8, gnina returned **positive affinities** (+16.1, +129.8) for
+one candidate, and imatinib scored **-4.42** against 1IEP, its own crystal
+structure. At exhaustiveness 16 the same molecule scores **-12.79**. That is a
+pure search failure, not chemistry, and it is why no candidate number from the
+exhaustiveness-8 pass was ever reported. QC found only 2/160 benchmark runs
+affected (1 active, 1 inactive), so the exh-8 AUC was not corrupted, but
+exhaustiveness 8 is not usable for large flexible ligands on this target.
+**Docking imatinib into its own crystal structure is the cheapest available
+protocol sanity check — run it before trusting any batch.**
+
+### Funds incident (2026-08-30, resolved)
+The account balance hit zero mid-run and RunPod terminated the pod without
+warning. Volume `e4akonl0eu` survived intact. Local safety copies of the three
+irreplaceable artefacts (`rl_v5d/policy_latest.pt`, `generator_best.pt`,
+`abl1_rf.joblib`, ~88 MB) now live in `checkpoints_backup/`, gitignored.
+Keep them: the volume remains the only other copy.
+
+## Congeneric series for RBFE (2026-08-31) — `src/build_series.py`, `src/select_rbfe_set.py`
+Relative FEP is the rigorous ranking method and the one this project could not
+use: RBFE morphs one ligand into another and needs a COMMON CORE, while the
+candidates were selected at pairwise Tanimoto < 0.45 to be diverse. Fix: keep
+the diversity filter for FINDING a chemotype, then elaborate the one whose pose
+validated. cand4 and cand5 are the two reproducing the full type-II signature.
+
+### The generator cannot elaborate cand5, and can elaborate cand4
+Sampling 40,000 molecules from v5d and matching each seed's Bemis-Murcko core:
+
+    cand4 core   1157 / 33,025 unique valid  = 3.50%
+    cand5 core      2 / 33,025               = 0.006%   (~580x rarer)
+
+**This is the diversity objective's cost, made concrete.** v5d was trained to
+spread across 333 frameworks and it does — which means it is correspondingly
+unwilling to produce many near-analogues of any particular one. Scaffold
+diversity and series elaboration are opposed objectives, and a model optimised
+hard for the first is a poor lead-optimisation engine. A follow-up run would
+want scaffold-conditioned sampling or a much weaker filter.
+
+### Deliverable: `results/series/rbfe_cand4.json` — 13 ligands, star map
+MCS 26 atoms / 29 bonds = **78% of the average member** (a valid RBFE core);
+MW 443-499, all sub-500; heavy-atom delta from seed <= 4; predicted activity
+P 0.528-0.732. Star topology on the pose-validated seed: 12 edges, mean
+Tanimoto 0.659. L10/L12 (isopropyl / tert-butyl acylurea homologues,
+Tanimoto 0.825 to seed) are the cheapest edges; five cycle closures are
+suggested in the JSON for statistical-error estimation.
+
+Liability screening rejected 539 of 607 size-passing members — PAINS + BRENK
+alerts, charge change at pH 7.4, and double-bond stereo changes relative to
+the seed. Charge change alone accounted for 354.
+
+### !! BUG FOUND AND FIXED: Dimorphite protonation was non-deterministic
+`protonate_smiles(..., precision=1.0)` (the default) **enumerates every
+microstate within +/-1 pH unit** — 4 to 8 per molecule here, formal charges
+spanning -1/0/+1 — and the code took `out[0]`, an arbitrary member of that
+list rather than the dominant form. `precision=0.0` returns the single
+dominant state (verified: dasatinib +1, aspirin -1, cand4 seed 0).
+
+Fixed in `src/select_rbfe_set.py` and `src/run_benchmark_docking.py`.
+**Consequence for results already recorded: every docking run up to
+2026-08-30 protonated its ligands non-deterministically.** Spot checks at the
+time (dasatinib -> [NH+], aspirin -> [O-]) happened to be correct but were
+luck of list ordering, not a guarantee. Vina-class scoring is only weakly
+electrostatic so the effect on *ranking* is likely second-order, but the
+docking numbers are not reproducible as run and should be regenerated with
+the fixed call before being published.
+
+## RE-DOCK with corrected protonation (2026-09-01) — `results/docking/redock/`
+100 ligands (40 actives, 40 matched inactives, 5 candidates, 3 drugs, 12 RBFE
+series members), 3 crystals x 3 seeds + AlphaFold, exhaustiveness 16, all with
+`precision=0.0`. **These are the numbers to quote.**
+
+### The bug was second-order for ranking, as predicted
+    scheme                 before (buggy)          after (fixed)
+    affinity @ 3CS9        0.799 [0.686,0.903]     0.797 [0.682,0.901]
+    affinity @ 2GQG        0.779 [0.667,0.877]     0.789 [0.679,0.881]
+    affinity @ 1IEP        0.755 [0.641,0.863]     0.766 [0.653,0.872]
+    affinity @ ensemble    0.790 [0.680,0.889]     0.797 [0.687,0.896]
+Every change is <= 0.011 and far inside the intervals. CNN rescoring still
+loses to plain Vina scoring (0.769 vs 0.797) — now on two independent datasets.
+
+### It DID halve the seed variance, and that is diagnostic
+    seed-to-seed spread   before: median 0.13  mean 0.35  max 3.40
+                          after:  median 0.06  mean 0.20  max 1.18
+`protonate()` is called once per (receptor, seed) job, so with the buggy
+non-deterministic call **different seeds could receive different protomers of
+the same ligand.** Much of what was reported as docking *search* variance was
+actually protonation variance wearing its clothes. Real search noise is about
+half what the earlier multi-seed run implied.
+
+### Final table (3-seed medians, corrected protonation)
+    molecule    source          median  spread    %ile   RF P
+    nilotinib   marketed drug   -13.63    0.03    100%     -
+    imatinib    marketed drug   -12.74    0.67     90%     -
+    cand5       RL v5d          -12.16    0.30     82%   0.814
+    cand3       RL v5d          -12.15    0.04     80%   0.863
+    cand4       RL v5d          -11.74    0.23     68%   0.818
+    cand1       RL v5d          -10.51    0.02     22%   1.000
+    dasatinib   marketed drug   -10.30    0.04     18%     -
+    cand2       RL v5d           -9.30    0.25      5%   0.985
+
+Set-level claim survives unchanged: candidates median-mean **-11.17** against
+benchmark actives **-11.31** and matched inactives **-9.85**. cand3 and cand5
+are within seed noise of imatinib; cand1, cand2 and cand4 are robustly worse.
+
+Two candidates moved materially: **cand4 32% -> 68%** and **cand5 90% -> 82%**.
+Protonation state matters most for the molecules carrying ionisable amines,
+which is exactly where the buggy call was picking arbitrarily.
+
+### Pose validation on corrected poses — the shortlist changes
+    1IEP/3CS9 (DFG-out)   Met318    Thr315    Glu286    Asp381
+    imatinib              backbone  sidechain sidechain backbone
+    nilotinib             backbone  sidechain sidechain backbone
+    cand4                 backbone  contact   sidechain backbone   <- full type II, BOTH
+    cand3                 backbone  contact   contact   contact    <- hinge on both
+    cand5                 contact   contact   contact   backbone   <- LOST polar hinge
+    cand2                 -         -         -         contact    <- fails on both
+
+**cand4 is now the best-supported candidate**, holding the complete
+imatinib/nilotinib type-II signature on both DFG-out structures. cand5's polar
+hinge contact does not survive corrected protonation, so its earlier top
+ranking was partly an artefact. cand2 remains rejected by score AND pose —
+the one unambiguous verdict in the set.
+
+Convenient consequence: cand4 is also the seed the generator can actually
+elaborate (3.50% vs cand5's 0.006%) and the one the RBFE series was built
+around, so that choice is retrospectively validated on independent grounds.
+
+### RBFE series docked on the same footing
+The 12 series members span **-12.09 to -9.80** (75th down to 8th percentile of
+known actives) — a ~2.3 kcal/mol range. That spread is what makes the series
+useful: a free-energy method has to reproduce a real rank order, and a set
+where everything is equipotent tests nothing. rbfe_L08 carries the largest
+seed spread in the whole run (1.18) and should be treated cautiously or dropped.
+
+## PROJECT WRAPPED (2026-09-08)
+The stated goal — reproduce Korshunova et al. 2022 for ABL1 with policy
+modifications — is met. v5d is the final model; the full 2^3 ablation, the
+docking validation and the limitations are written up in `README.md`.
+
+### RBFE: set up, deliberately not run
+Inputs are prepared and validated (12 ligands embedded on the pose-validated
+cand4 with core RMSD 0.000, protein through PDBFixer, star map in
+`results/series/rbfe_cand4.json`). `src/prep_rbfe.py` works;
+`src/run_rbfe.py` has **never completed a run** — the pilot edge died on
+`CUDA_ERROR_UNSUPPORTED_PTX_VERSION`. A full campaign is 3-5 GPU-days
+(~$55-90) and was judged past the scope of a reproduction study.
+
+Two operational notes if it is ever resumed:
+- The openfe conda env lives on network volume `e4akonl0eu`, but **RunPod
+  hosts differ in driver version** (seen: 580 -> CUDA 13.0, 570 -> CUDA 12.8).
+  An env resolved against one host's driver fails on another. Pin
+  `cuda-version=12.8`, which both accept. A `mamba install cuda-version=12.8
+  openmm=8.4` was started and not confirmed finished.
+- Setup upstream of the GPU is validated: LOMAP mapped 42 atoms SEED->L01,
+  hybrid topology built, both legs solvated. Only kernel loading failed.
+
+### Cost incident to avoid repeating
+A pod was left running 2026-09-02 and found terminated on 2026-09-08. Whether
+it idled six days at $0.74/hr (~$107) or was killed earlier is unknown — the
+billing MCP tool returned `unknown tool get-billing`. **Terminate the pod at
+the end of every working block**, not only at the end of a task.
+- MM-GBSA or short-MD rescoring — the standard escalation once empirical
+  scoring saturates around AUC 0.8.
+- Final write-up.
+  Note this overlaps the replay term: replay is a likelihood term on
+  remembered high-reward molecules inside the RL update, whereas the
+  paper's component 1 is a separate periodic fine-tuning phase.
 - Ablations of each component against the v3 baseline.
 - Final candidate generation + write-up.
 
 ## Next step
-Implement diversity-filtered experience replay on top of v3, then ablate.
-Baseline to beat is `results/rl_baseline_v3/scaffolds.json`: **33 unique
-scaffolds among P(active)>=0.5, with the top scaffold covering 58%** of
-that set. Success = more scaffolds AND a lower top-scaffold share, while
-holding valid% (99.6), novelty (98%) and the AD metrics where v3 has them.
+Model work is complete: **v5d meets every success criterion set in advance**
+(17.5x more generic frameworks, top share 77% -> 10%, potency 5.7% -> 14.9%,
+AD 94.4% -> 99.8%, validity and novelty held). Remaining:
+1. Agree a docking protocol, then score the 5 candidates vs the 5 matched
+   negatives in `results/candidates_v5d.json`. **Do not run docking before
+   that discussion.**
+2. Final write-up.
+
+The main known weakness is no longer the generator — it is the **reward
+model**. The RF is the only judge of activity, was trained on 3,097 ABL1
+compounds, and its ensemble variance provably fails to detect out-of-domain
+drift (v4a: uncertainty fell to 0.199 while AD coverage halved). Docking is
+valuable here precisely because it is an orthogonal check that does not
+depend on the RF at all.
 
 ## Local mirror for review
 The pod is the source of truth for data/weights, but all code + metrics are
