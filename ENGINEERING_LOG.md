@@ -23,10 +23,17 @@ rebuilds the environment. Machine-specific access notes are in
   params, 10 epochs, val loss 0.4912, 97.9% valid / 100% unique / 95.2% novel.
   → `checkpoints/generator_best.pt`
 - ABL1 data pulled: 6,314 activity records → 3,097 unique compounds,
-  1,186 active at pChEMBL>=8 (38.3%). `src/pull_abl1.py`
+  **1,265 active at pChEMBL>=8 (40.8%)**. `src/pull_abl1.py`
 - **QSAR reward model** (`src/qsar_model.py`): ECFP4 + RF, scaffold-split
-  ROC-AUC 0.906 / PR-AUC 0.851; 5-fold CV ROC-AUC 0.952.
+  **ROC-AUC 0.900 / PR-AUC 0.849; 5-fold CV ROC-AUC 0.948 ± 0.006**.
   → `checkpoints/abl1_rf.joblib`
+
+  These are the post-switch numbers, verified against
+  `results/qsar_metrics.json`. Before the median→max aggregation change
+  described in decision #1 below, the same pipeline gave 1,186 actives
+  (38.3%) and ROC-AUC 0.906 / CV 0.952 — slightly higher, on an easier and
+  less useful labelling. Superseded, recorded here so the two sets of numbers
+  are not mistaken for a discrepancy.
 
 ## Decisions resolved (2026-08-24)
 1. **Reward-model labeling: switched median→max aggregation, retrained.**

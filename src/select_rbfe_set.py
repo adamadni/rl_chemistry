@@ -31,7 +31,7 @@ statistical error, and the script reports which extra edges would be cheapest.
 Usage:
     python src/select_rbfe_set.py --series series_cand4.json --k 16
 """
-import argparse, json, itertools, sys
+import argparse, itertools, json, os, sys
 import numpy as np
 from rdkit import Chem, DataStructs, RDLogger
 from rdkit.Chem import rdFMCS, rdFingerprintGenerator

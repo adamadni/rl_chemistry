@@ -1,12 +1,22 @@
 .claude/settings.local.json
 
-# Local safety copies of irreplaceable artefacts (2026-08-30 funds incident).
-# Deliberately not committed - repo policy is code+metrics only - but these are
-# the ONLY copies outside RunPod volume e4akonl0eu. OneDrive provides offsite.
+# Machine-specific operational notes (environment access, account details)
+CLAUDE.local.md
+
+# Model artefacts and data: this repo is code + metrics. Weights, the ChEMBL
+# corpus and the environment are too large to version here, and paths.py
+# creates the directories on demand.
+checkpoints/
 checkpoints_backup/
+data/
+venv/
+rbfe/
+docking/out/
+docking/lig*/
+docking/*.sdf
+docking/smina
+docking/gnina
+refs/
 
 __pycache__/
 *.pyc
-
-# Machine-specific operational notes (pod access, account details)
-CLAUDE.local.md

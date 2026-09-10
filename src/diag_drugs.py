@@ -1,3 +1,17 @@
+"""Why did the reward model score the known ABL1 drugs the way it did?
+
+Run after any change to the labelling scheme or the QSAR model. For imatinib,
+dasatinib and nilotinib it reports the measured pChEMBL in the training set,
+the label that measurement produced, the model's predicted P(active), and the
+nearest training neighbours by Tanimoto.
+
+This exists because a reward model can be right on aggregate metrics and wrong
+in the way that matters. Under median-pChEMBL aggregation the scaffold-split
+ROC-AUC was 0.906 -- slightly better than the 0.900 the project ended with --
+while imatinib (6.66) and nilotinib (7.55) were both labelled INACTIVE, leaving
+the active class dominated by one chemotype. An aggregate score cannot show
+that; this can, which is what prompted the switch to max aggregation.
+"""
 import json, os, sys
 import numpy as np
 from rdkit import Chem, RDLogger, DataStructs

@@ -219,6 +219,10 @@ only and have never executed successfully.**
 | `src/multiseed_table.py`, `src/final_table.py` | Result tables |
 | `src/build_series.py`, `src/select_rbfe_set.py` | Congeneric series construction |
 | `src/prep_rbfe.py`, `src/run_rbfe.py` | RBFE setup — **never successfully run** |
+| `src/smiles_utils.py` | Strict RDKit validity and canonicalisation, shared everywhere |
+| `src/diag_drugs.py` | Diagnostic: why the reward model scored the known drugs as it did |
+| `src/verify_pipeline.py` | Smoke test comparing SMILES handling against OpenChem's |
+| `src/resolve_targets.py`, `src/screen_targets.py` | Target selection: ChEMBL ID resolution and data-availability counts, run before ABL1 was picked |
 | `results/` | All metrics, per-run histories, docking results |
 | `logs/` | Full training logs, every RL run |
 | `ENGINEERING_LOG.md` | Detailed engineering log: every failure, diagnosis and fix, in the order they happened |

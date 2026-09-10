@@ -3,6 +3,7 @@
 Verifies the plumbing only. No training, no model construction.
 """
 import gzip
+import os
 import sys
 import time
 
