@@ -36,6 +36,8 @@ import numpy as np
 from rdkit import Chem, DataStructs, RDLogger
 from rdkit.Chem import rdFMCS, rdFingerprintGenerator
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import rel
 RDLogger.DisableLog("rdApp.*")
 
 _p = FilterCatalogParams()
@@ -98,7 +100,7 @@ def liabilities(smi, seed_charge, seed_stereo):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--series", default="/workspace/rl_chemistry/series_cand4.json")
+    ap.add_argument("--series", default=rel("series_cand4.json"))
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--max-mw", type=float, default=500.0)
     ap.add_argument("--max-heavy-delta", type=int, default=8)
@@ -195,7 +197,7 @@ def main():
     for e in pairs[:5]:
         print(f"  {e['from']} <-> {e['to']}   Tanimoto {e['tanimoto']:.3f}")
 
-    out = args.out or f"/workspace/rl_chemistry/rbfe_{d['seed']}.json"
+    out = args.out or rel(f"rbfe_{d['seed']}.json")
     json.dump({"seed": d["seed"], "seed_smiles": d["seed_smiles"], "core": d["core"],
                "mcs_smarts": mcs.smartsString, "mcs_atoms": mcs.numAtoms,
                "ligands": rows, "star_edges": star, "suggested_closures": pairs[:5]},

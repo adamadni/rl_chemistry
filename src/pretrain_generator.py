@@ -12,11 +12,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from smiles_utils import canonicalize
 
-DATA = "/workspace/rl_chemistry/data/processed"
-CKPT = "/workspace/rl_chemistry/checkpoints"
+from paths import DATA, CKPT
 os.makedirs(CKPT, exist_ok=True)
 
 EPOCHS      = int(os.environ.get("EPOCHS", 10))

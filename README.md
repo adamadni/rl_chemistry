@@ -199,6 +199,7 @@ only and have never executed successfully.**
 
 | Path | Role |
 |---|---|
+| `src/paths.py` | Project-root resolution — every other path derives from here |
 | `src/preprocess_chembl.py` | ChEMBL cleaning, vocab, train/val split |
 | `src/pretrain_generator.py` | Character-level LSTM prior |
 | `src/pull_abl1.py` | ABL1 bioactivity, max-aggregated pChEMBL |
@@ -222,27 +223,42 @@ only and have never executed successfully.**
 | `logs/` | Full training logs, every RL run |
 | `ENGINEERING_LOG.md` | Detailed engineering log: every failure, diagnosis and fix, in the order they happened |
 
-## Compute
+## Running it
 
-Training and docking ran on a rented **RunPod RTX 4090**; this repository is a mirror of
-code and metrics. Model weights, the ChEMBL corpus and the venv live on a persistent
-network volume and are **not** committed (size). Local safety copies of the three
-irreplaceable artefacts sit in `checkpoints_backup/` (gitignored).
-
-Full RL run: 5000 steps, ~40 min. Full ablation (8 cells): ~3 h. Docking benchmark
-(100 ligands × 3 receptors × 3 seeds): ~35 min.
+All paths resolve from the repository root via `src/paths.py`, so a fresh clone works
+unconfigured. Set `RL_CHEM_ROOT` only if data and checkpoints should live somewhere other
+than the checkout (a mounted volume, a scratch disk).
 
 ```bash
-# final model
+git clone https://github.com/adamadni/rl_chemistry && cd rl_chemistry
+pip install -r requirements-lock.txt          # or ./bootstrap.sh
+
+# 1. build the corpus and the reward model (downloads ChEMBL; several hours)
+python src/preprocess_chembl.py
+python src/pretrain_generator.py
+python src/pull_abl1.py
+python src/qsar_model.py
+
+# 2. the final model — 5000 steps, ~40 min on a 4090
 python src/train_rl.py --steps 5000 --batch 128 --lr 1e-4 \
   --beta-kl 0.02 --target-kl 3.0 --ppo-epochs 4 --clip-eps 0.2 \
   --lambda-unc 1.0 --threshold-update-every 50 --threshold-decay 0.1 \
   --diversity-filter --replay --transfer-learning \
   --out checkpoints/rl_v5d
 
+# 3. evaluate
 python src/eval_policy.py --policy checkpoints/rl_v5d/policy_latest.pt --n 5000
 python src/analyze_scaffolds.py --policy checkpoints/rl_v5d/policy_latest.pt --n 5000
 ```
+
+Step 1 needs the ChEMBL 37 `chemreps` archive in `data/raw/`; steps 2–3 need a CUDA GPU.
+The docking scripts additionally need `smina` or `gnina` binaries in `docking/`.
+
+**Timings** (RTX 4090): full RL run ~40 min · full 8-cell ablation ~3 h · docking benchmark
+(100 ligands × 3 receptors × 3 seeds) ~35 min.
+
+**Not committed:** model weights, the ChEMBL corpus and the environment — size, not secrecy.
+The repository holds code and metrics.
 
 **Watch during a run:** `unique_pct` and `scaffold_ratio` (collapse), `beta_kl` (spikes
 when `kl` rises — the controller catching a runaway), `dfmult` (filter bite),

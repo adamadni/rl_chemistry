@@ -27,12 +27,14 @@ is a known systematic error in this kind of calculation, recorded here so it
 is a stated assumption rather than an oversight.
 
 Usage:
-    python src/prep_rbfe.py --out-dir /workspace/rl_chemistry/rbfe
+    python src/prep_rbfe.py
 """
 import argparse, json, os, sys
 import numpy as np
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, rdFMCS
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING, RBFE, rel
 RDLogger.DisableLog("rdApp.*")
 
 
@@ -85,10 +87,10 @@ def constrained_pose(smiles, ref_noh, timeout=60, seed=42):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--rbfe-json", default="/workspace/rl_chemistry/rbfe_cand4.json")
-    ap.add_argument("--ref-pose", default="/workspace/rl_chemistry/docking/out/cand4_1IEP_s42.sdf")
-    ap.add_argument("--receptor", default="/workspace/rl_chemistry/docking/struct/1IEP_rec.pdb")
-    ap.add_argument("--out-dir", default="/workspace/rl_chemistry/rbfe")
+    ap.add_argument("--rbfe-json", default=rel("rbfe_cand4.json"))
+    ap.add_argument("--ref-pose", default=os.path.join(DOCKING, "out", "cand4_1IEP_s42.sdf"))
+    ap.add_argument("--receptor", default=os.path.join(DOCKING, "struct", "1IEP_rec.pdb"))
+    ap.add_argument("--out-dir", default=RBFE)
     ap.add_argument("--drop", nargs="*", default=["L08"],
                     help="ligand ids to exclude; L08 carries the largest seed spread "
                          "in the whole docking run (1.18 kcal/mol)")

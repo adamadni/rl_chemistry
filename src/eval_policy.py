@@ -7,10 +7,10 @@ Scaffold diversity is the headline number here: the whole point of the
 threshold-shaping + PPO + adaptive-KL work was to raise reward WITHOUT
 collapsing scaffold variety, so both must be read together.
 """
-import argparse, json, sys
+import argparse, json, os, sys
 import numpy as np
 import torch
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from smiles_utils import canonicalize
 from reward_model import RewardModel
 from train_rl import SmilesRNN, ADReference, scaffold_of, DATA, CKPT, DEV

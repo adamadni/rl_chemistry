@@ -30,6 +30,8 @@ Usage:
 import argparse, json, os, re, subprocess, sys
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING
 RDLogger.DisableLog("rdApp.*")
 
 
@@ -98,7 +100,7 @@ def dock(gnina, rec, lig, box, out, exh, seed):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--receptor", required=True)
     ap.add_argument("--ligands", default=None, help="defaults to docking/benchmark.json")
     ap.add_argument("--exhaustiveness", type=int, default=8)

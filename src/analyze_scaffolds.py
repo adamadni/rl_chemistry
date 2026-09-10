@@ -16,9 +16,9 @@ would overstate the result: nearly every high-reward molecule can be
 Usage:
     python src/analyze_scaffolds.py [--policy PATH] [--n 5000] [--threshold 0.5]
 """
-import argparse, collections, json, sys
+import argparse, collections, json, os, sys
 import numpy as np
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eval_policy import load, sample
 from reward_model import RewardModel
 from train_rl import scaffold_of, ADReference, DATA, CKPT

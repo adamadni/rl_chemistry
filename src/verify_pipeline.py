@@ -6,10 +6,11 @@ import gzip
 import sys
 import time
 
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import RAW
 from smiles_utils import canonicalize, is_valid, valid_fraction, largest_fragment
 
-CHEMREPS = "/workspace/rl_chemistry/data/raw/chembl_37_chemreps.txt.gz"
+CHEMREPS = os.path.join(RAW, "chembl_37_chemreps.txt.gz")
 N_SAMPLE = 10000
 TOTAL_ROWS = 2897819
 

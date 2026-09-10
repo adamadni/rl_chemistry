@@ -25,9 +25,10 @@ highest-potency first, so the set spans chemotypes rather than a few series.
 Usage:
     python src/build_benchmark.py --n 40 --out docking/benchmark.json
 """
-import argparse, json, sys
+import argparse, json, os, sys
 import numpy as np
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING
 from train_rl import scaffold_of, DATA
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors
@@ -50,7 +51,7 @@ def main():
     ap.add_argument("--inactive-max-pchembl", type=float, default=5.5)
     ap.add_argument("--heavy-min", type=int, default=20)
     ap.add_argument("--heavy-max", type=int, default=45)
-    ap.add_argument("--out", default="/workspace/rl_chemistry/docking/benchmark.json")
+    ap.add_argument("--out", default=os.path.join(DOCKING, "benchmark.json"))
     args = ap.parse_args()
 
     data = json.load(open(f"{DATA}/abl1_qsar.json"))

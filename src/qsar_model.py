@@ -9,7 +9,7 @@ Validated on a Bemis-Murcko SCAFFOLD split, not a random split: a random split
 leaks close analogues across the boundary and overstates what the model will do
 on generator output, which is the only regime the RL loop cares about.
 """
-import json, os
+import json, os, sys
 from collections import defaultdict
 
 import numpy as np
@@ -24,8 +24,8 @@ from sklearn.metrics import (roc_auc_score, average_precision_score, confusion_m
                              recall_score, brier_score_loss)
 
 RDLogger.DisableLog("rdApp.*")
-DATA = "/workspace/rl_chemistry/data/processed"
-CKPT = "/workspace/rl_chemistry/checkpoints"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DATA, CKPT
 os.makedirs(CKPT, exist_ok=True)
 SEED, RADIUS, NBITS = 42, 2, 2048          # ECFP4
 

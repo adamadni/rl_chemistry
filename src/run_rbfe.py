@@ -32,7 +32,7 @@ Usage:
     python src/run_rbfe.py --pilot                 # one edge, short, to time it
     python src/run_rbfe.py --edges L10 L12 --production 2.5
 """
-import argparse, json, os, pathlib, time
+import argparse, json, os, pathlib, sys, time
 from rdkit import Chem
 from openff.units import unit
 import openfe
@@ -41,6 +41,8 @@ from openfe import (SmallMoleculeComponent, ProteinComponent, SolventComponent,
 from openfe.protocols.openmm_rfe import RelativeHybridTopologyProtocol
 from openfe.setup import LomapAtomMapper
 from gufe.protocols import execute_DAG
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import RBFE
 
 
 def build_settings(args):
@@ -58,7 +60,7 @@ def build_settings(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/rbfe")
+    ap.add_argument("--dir", default=RBFE)
     ap.add_argument("--seed-id", default="SEED")
     ap.add_argument("--edges", nargs="*", default=None,
                     help="ligand ids to connect to the seed; default = all")

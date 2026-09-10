@@ -28,9 +28,11 @@ Box centre is the centroid of each structure's own co-crystallised inhibitor
 
 Usage:  python src/prep_receptors.py --dir <docking dir>
 """
-import argparse, json, os
+import argparse, json, os, sys
 import numpy as np
 from Bio.PDB import PDBParser, PDBIO, Select, Superimposer
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING
 
 # ABL1 (UniProt P00519, isoform 1a numbering) kinase domain. The crystals
 # cover roughly this span; the AlphaFold model is trimmed to match so the
@@ -63,7 +65,7 @@ def biggest_het(chain):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--pad", type=float, default=12.0, help="box half-width around ligand centroid")
     args = ap.parse_args()
     S, OUT = os.path.join(args.dir, "struct"), os.path.join(args.dir, "struct")

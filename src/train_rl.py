@@ -108,7 +108,7 @@ import argparse, collections, json, math, os, random, sys, time
 import numpy as np
 import torch
 import torch.nn as nn
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from smiles_utils import canonicalize
 from reward_model import RewardModel
 from diversity_filter import DiversityFilter, scaffold_key
@@ -117,8 +117,7 @@ from rdkit import Chem, RDLogger
 from rdkit.Chem import rdFingerprintGenerator
 from rdkit.Chem.Scaffolds import MurckoScaffold
 RDLogger.DisableLog("rdApp.*")
-DATA = "/workspace/rl_chemistry/data/processed"
-CKPT = "/workspace/rl_chemistry/checkpoints"
+from paths import DATA, CKPT
 GEN_CKPT = f"{CKPT}/generator_best.pt"
 DEV = torch.device("cuda")
 class SmilesRNN(nn.Module):

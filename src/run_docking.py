@@ -29,6 +29,8 @@ Usage:
 import argparse, json, os, re, subprocess, sys
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING, rel
 RDLogger.DisableLog("rdApp.*")
 
 KNOWN_ACTIVES = {
@@ -79,8 +81,8 @@ def dock(smina, rec, lig_sdf, box, out_sdf, exhaustiveness, cpu, seed=42):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
-    ap.add_argument("--candidates", default="/workspace/rl_chemistry/results_candidates_v5d.json")
+    ap.add_argument("--dir", default=DOCKING)
+    ap.add_argument("--candidates", default=rel("results", "candidates_v5d.json"))
     ap.add_argument("--set", choices=["control", "candidates", "all"], default="control")
     ap.add_argument("--exhaustiveness", type=int, default=16)
     ap.add_argument("--cpu", type=int, default=8)

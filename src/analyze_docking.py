@@ -16,8 +16,10 @@ result, so they are declared explicitly:
 Usage:
     python src/analyze_docking.py --receptors 1IEP 2GQG
 """
-import argparse, json, os
+import argparse, json, os, sys
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING
 
 FIELDS = [("affinity", False), ("cnn_score", True), ("cnn_affinity", True)]
 
@@ -52,7 +54,7 @@ def ef(pos, neg, frac=0.10):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--receptors", nargs="+", default=["1IEP", "2GQG"])
     ap.add_argument("--pattern", default="bench_{r}.json",
                     help="filename template; use e.g. 'rd_{r}_s42.json' for the "

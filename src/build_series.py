@@ -38,9 +38,10 @@ What makes the output RBFE-ready, and is checked rather than assumed:
 Usage:
     python src/build_series.py --seed-mol cand5 --n-sample 40000
 """
-import argparse, json, sys
+import argparse, json, os, sys
 import numpy as np
-sys.path.insert(0, "/workspace/rl_chemistry/src")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import rel
 from eval_policy import load, sample
 from reward_model import RewardModel
 from train_rl import ADReference, DATA, CKPT
@@ -194,7 +195,7 @@ def main():
               f"{r['uncertainty']:>6.3f} {r['heavy_delta_from_seed']:>7d} {r['mw']:>7.1f}"
               + ("   <- seed" if r["is_seed"] else ""))
 
-    out = args.out or f"/workspace/rl_chemistry/series_{args.seed_mol}.json"
+    out = args.out or rel(f"series_{args.seed_mol}.json")
     json.dump({"seed": args.seed_mol, "seed_smiles": seed["smiles"], "core": core_smi,
                "mcs": mcs.smartsString if mcs else None,
                "n_members": len(kept), "members": kept}, open(out, "w"), indent=1)

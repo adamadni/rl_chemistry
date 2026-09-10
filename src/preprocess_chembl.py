@@ -5,15 +5,17 @@ element whitelist -> size/length filters -> dedup. Character-level vocabulary,
 matching OpenChem's `get_tokens` (it does set(''.join(smiles)), so 'Cl' is
 two tokens 'C','l'). Staying faithful to the reference here.
 """
-import gzip, json, os, random, re
+import gzip, json, os, random, re, sys
 from multiprocessing import Pool
 from collections import Counter
 
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog("rdApp.*")
 
-RAW = "/workspace/rl_chemistry/data/raw/chembl_37_chemreps.txt.gz"
-OUT = "/workspace/rl_chemistry/data/processed"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import RAW as RAW_DIR, DATA as OUT
+
+RAW = os.path.join(RAW_DIR, "chembl_37_chemreps.txt.gz")
 os.makedirs(OUT, exist_ok=True)
 
 MAX_LEN = 100          # chars; covers ~95% of ChEMBL (p95=102 measured earlier)

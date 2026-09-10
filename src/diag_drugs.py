@@ -1,10 +1,12 @@
-import json
+import json, os, sys
 import numpy as np
 from rdkit import Chem, RDLogger, DataStructs
 from rdkit.Chem import rdFingerprintGenerator
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DATA
 RDLogger.DisableLog("rdApp.*")
 
-data = json.load(open("/workspace/rl_chemistry/data/processed/abl1_qsar.json"))
+data = json.load(open(os.path.join(DATA, "abl1_qsar.json")))
 by_smi = {d["smiles"]: d for d in data}
 
 drugs = {

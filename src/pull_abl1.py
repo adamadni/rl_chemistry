@@ -11,14 +11,15 @@ model a scaffold-narrow target. Max aggregation is more outlier-sensitive
 diverse known actives into the positive class, broadening what the reward
 model treats as "active" -- see ENGINEERING_LOG.md decision #1.
 """
-import json, time, os
+import json, time, os, sys
 from collections import defaultdict
 import requests
 from rdkit import Chem, RDLogger
 RDLogger.DisableLog("rdApp.*")
 BASE = "https://www.ebi.ac.uk/chembl/api/data"
 TARGET = "CHEMBL1862"
-OUT = "/workspace/rl_chemistry/data/processed"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DATA as OUT
 os.makedirs(OUT, exist_ok=True)
 ACTIVE_THRESHOLD = 8.0
 # binding/functional potency only -- excludes ADMET/tox endpoints

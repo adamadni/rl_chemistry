@@ -12,19 +12,21 @@ each entry is a robust summary rather than a lucky draw. The spread reported
 is over the ensemble-best across seeds -- that is the quantity the table
 actually uses, so it is the quantity whose uncertainty matters.
 """
-import argparse, glob, json, os, re
+import argparse, glob, json, os, re, sys
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING, rel
 
 CRYSTALS = ["1IEP", "3CS9", "2GQG"]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--prefix", default="ms",
                     help="'ms' = pre-fix multi-seed run; 'rd' = re-dock with corrected pH 7.4 protonation")
-    ap.add_argument("--cand-json", default="/workspace/rl_chemistry/results_candidates_v5d.json")
-    ap.add_argument("--out", default="/workspace/rl_chemistry/docking/multiseed_table.json")
+    ap.add_argument("--cand-json", default=rel("results", "candidates_v5d.json"))
+    ap.add_argument("--out", default=os.path.join(DOCKING, "multiseed_table.json"))
     args = ap.parse_args()
 
     runs = {}

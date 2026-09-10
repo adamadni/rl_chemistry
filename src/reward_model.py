@@ -31,13 +31,16 @@ either way". Invalid SMILES get a fixed negative reward clearly below
 anything a valid-but-bad molecule can score, so it never accidentally
 ties with (or beats) real chemistry.
 """
-import os
+import os, sys
 import joblib
 import numpy as np
 from rdkit import Chem, RDLogger
 from rdkit.Chem import rdFingerprintGenerator
 RDLogger.DisableLog("rdApp.*")
-CKPT_PATH = "/workspace/rl_chemistry/checkpoints/abl1_rf.joblib"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import CKPT
+
+CKPT_PATH = os.path.join(CKPT, "abl1_rf.joblib")
 class RewardModel:
     def __init__(self, ckpt_path=CKPT_PATH, lambda_unc=1.0, invalid_reward=-1.0):
         ck = joblib.load(ckpt_path)

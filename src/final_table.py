@@ -16,8 +16,10 @@ measured.
 
 Usage:  python src/final_table.py [--exh16] [--md]
 """
-import argparse, json, os
+import argparse, json, os, sys
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING, rel
 
 CRYSTALS = ["1IEP", "3CS9", "2GQG"]
 ALL_RECS = ["1IEP", "3CS9", "2GQG", "AF"]
@@ -42,10 +44,10 @@ def best(store, name, field, higher, recs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--prefix", default="all16")
-    ap.add_argument("--cand-json", default="/workspace/rl_chemistry/results_candidates_v5d.json")
-    ap.add_argument("--out", default="/workspace/rl_chemistry/docking/final_table.json")
+    ap.add_argument("--cand-json", default=rel("results", "candidates_v5d.json"))
+    ap.add_argument("--out", default=os.path.join(DOCKING, "final_table.json"))
     args = ap.parse_args()
 
     S = load(args.dir, args.prefix, ALL_RECS)

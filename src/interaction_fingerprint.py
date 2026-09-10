@@ -34,10 +34,12 @@ asymmetry is exactly what is needed to catch scoring artefacts.
 Usage:
     python src/interaction_fingerprint.py --receptor 1IEP --seed 42
 """
-import argparse, glob, json, os, re
+import argparse, glob, json, os, re, sys
 import numpy as np
 from Bio.PDB import PDBParser
 from rdkit import Chem, RDLogger
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import DOCKING
 RDLogger.DisableLog("rdApp.*")
 
 KEY = {271: "Lys271", 286: "Glu286", 315: "Thr315", 318: "Met318", 381: "Asp381"}
@@ -85,7 +87,7 @@ def fingerprint(lig, rec, polar_cut, apolar_cut):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="/workspace/rl_chemistry/docking")
+    ap.add_argument("--dir", default=DOCKING)
     ap.add_argument("--receptor", default="1IEP")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--polar-cut", type=float, default=3.5)
