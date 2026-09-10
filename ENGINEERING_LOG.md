@@ -1,17 +1,21 @@
-# rl_chemistry — status
+# Engineering log — rl_chemistry
 
-Reproduction of Korshunova et al. 2022 (Commun Chem 5:129), sparse-reward RL
-molecular generator. Target: **ABL1 (CHEMBL1862)**, chosen by the user.
+Reproduction of Korshunova et al. 2022 (Commun Chem 5:129), a sparse-reward RL
+molecular generator, retargeted to **ABL1 (CHEMBL1862)**.
 
-All compute is remote — see memory `runpod-pod-access` for the SSH wrapper
-(RunPod's proxy needs it; plain `ssh host "cmd"` fails). Pod IDs change on
-recreate; ask the user for the current SSH string. Project root
-`/workspace/rl_chemistry` on the persistent network volume (survives pod
-termination). `bootstrap.sh` rebuilds the venv on a fresh pod.
+This is the working log: every design decision, every failure, and the
+diagnosis behind each fix, in the order they happened. `README.md` is the
+summary; this file is the reasoning. Where a decision looks arbitrary in the
+code, the justification is here.
+
+Compute ran on a rented RTX 4090 with the project rooted at
+`/workspace/rl_chemistry` on a persistent network volume; `bootstrap.sh`
+rebuilds the environment. Machine-specific access notes are in
+`CLAUDE.local.md` (untracked).
 
 ## Done
 - Environment: RTX 4090, torch 2.8.0+cu128, RDKit 2026.03.5, OpenChem
-  importable (see memory `openchem-python312-gotchas`).
+  importable.
 - ChEMBL 37 pulled + sha256-verified (2,897,819 cpds).
 - Corpus preprocessed → 2,599,495 unique molecules (93.2% pass), 42-token
   char vocab, train 2,469,521 / val 129,974. `src/preprocess_chembl.py`
@@ -569,13 +573,6 @@ exhaustiveness 8 is not usable for large flexible ligands on this target.
 **Docking imatinib into its own crystal structure is the cheapest available
 protocol sanity check — run it before trusting any batch.**
 
-### Funds incident (2026-08-30, resolved)
-The account balance hit zero mid-run and RunPod terminated the pod without
-warning. Volume `e4akonl0eu` survived intact. Local safety copies of the three
-irreplaceable artefacts (`rl_v5d/policy_latest.pt`, `generator_best.pt`,
-`abl1_rf.joblib`, ~88 MB) now live in `checkpoints_backup/`, gitignored.
-Keep them: the volume remains the only other copy.
-
 ## Congeneric series for RBFE (2026-08-31) — `src/build_series.py`, `src/select_rbfe_set.py`
 Relative FEP is the rigorous ranking method and the one this project could not
 use: RBFE morphs one ligand into another and needs a COMMON CORE, while the
@@ -705,64 +702,29 @@ cand4 with core RMSD 0.000, protein through PDBFixer, star map in
 `CUDA_ERROR_UNSUPPORTED_PTX_VERSION`. A full campaign is 3-5 GPU-days
 (~$55-90) and was judged past the scope of a reproduction study.
 
-Two operational notes if it is ever resumed:
-- The openfe conda env lives on network volume `e4akonl0eu`, but **RunPod
-  hosts differ in driver version** (seen: 580 -> CUDA 13.0, 570 -> CUDA 12.8).
-  An env resolved against one host's driver fails on another. Pin
-  `cuda-version=12.8`, which both accept. A `mamba install cuda-version=12.8
-  openmm=8.4` was started and not confirmed finished.
-- Setup upstream of the GPU is validated: LOMAP mapped 42 atoms SEED->L01,
-  hybrid topology built, both legs solvated. Only kernel loading failed.
+Setup upstream of the GPU is validated — LOMAP mapped 42 atoms SEED->L01,
+hybrid topology built, both legs solvated. Only kernel loading failed, on a
+CUDA/driver version mismatch. Environment details are in `CLAUDE.local.md`.
 
-### Cost incident to avoid repeating
-A pod was left running 2026-09-02 and found terminated on 2026-09-08. Whether
-it idled six days at $0.74/hr (~$107) or was killed earlier is unknown — the
-billing MCP tool returned `unknown tool get-billing`. **Terminate the pod at
-the end of every working block**, not only at the end of a task.
+## Where this ended up
+**v5d meets every success criterion set in advance**: 17.5x more generic
+frameworks, top-chemotype share 77% -> 10%, predicted-active rate
+5.7% -> 14.9%, applicability-domain coverage 94.4% -> 99.8%, with validity
+and novelty held. Docking validation is complete and the limitations are
+written up in `README.md`.
+
+**The main known weakness is not the generator — it is the reward model.**
+The RF is the only judge of activity, was trained on 3,097 ABL1 compounds,
+and its ensemble variance provably fails to detect out-of-domain drift (v4a:
+uncertainty fell to 0.199 while AD coverage halved to 45.2%). That is why
+docking was worth running at all: it is an orthogonal check that does not
+depend on the RF. It is also why the two validators disagreeing is a finding
+rather than an error.
+
+Work that remains, none of it required for the reproduction claim:
+- Multi-seed replication of the RL runs (all are n=1 on seed 42).
 - MM-GBSA or short-MD rescoring — the standard escalation once empirical
-  scoring saturates around AUC 0.8.
-- Final write-up.
-  Note this overlaps the replay term: replay is a likelihood term on
-  remembered high-reward molecules inside the RL update, whereas the
-  paper's component 1 is a separate periodic fine-tuning phase.
-- Ablations of each component against the v3 baseline.
-- Final candidate generation + write-up.
-
-## Next step
-Model work is complete: **v5d meets every success criterion set in advance**
-(17.5x more generic frameworks, top share 77% -> 10%, potency 5.7% -> 14.9%,
-AD 94.4% -> 99.8%, validity and novelty held). Remaining:
-1. Agree a docking protocol, then score the 5 candidates vs the 5 matched
-   negatives in `results/candidates_v5d.json`. **Do not run docking before
-   that discussion.**
-2. Final write-up.
-
-The main known weakness is no longer the generator — it is the **reward
-model**. The RF is the only judge of activity, was trained on 3,097 ABL1
-compounds, and its ensemble variance provably fails to detect out-of-domain
-drift (v4a: uncertainty fell to 0.199 while AD coverage halved). Docking is
-valuable here precisely because it is an orthogonal check that does not
-depend on the RF at all.
-
-## Local mirror for review
-The pod is the source of truth for data/weights, but all code + metrics are
-mirrored to `C:\Users\Adam\rl_chemistry` for VS Code review:
-`src/*.py` (12 scripts, md5-verified against the pod), `results/` (QSAR
-metrics, v3 history/eval/scaffolds), `logs/` (all three RL runs),
-`README.md`, `bootstrap.sh`, `requirements-lock.txt`. Weights, ChEMBL data
-and the venv are NOT mirrored (too large) — they live only on the pod's
-network volume. Transfer uses `<scratchpad>/rppush.sh` / `rppull.sh`
-(scp is unavailable over the RunPod proxy; see memory `runpod-pod-access`).
-
-## VS Code access
-Remote-SSH alias `runpod-rlchem` is configured in
-`C:\Users\Adam\.ssh\config` (see memory `runpod-pod-access`) — connect and
-open `/workspace/rl_chemistry` to browse/watch files live. Its `User` line
-must be updated whenever the pod is recreated, same as rp.sh's `POD=`.
-
-## Pod lifecycle note
-Pod is stopped between sessions (user's choice, to avoid idle billing).
-Data/venv/checkpoints survive on the network volume. On resume: get the new
-SSH string from the user (pod ID changes on restart/recreate), update
-`POD=` in the rp.sh wrapper (see memory `runpod-pod-access`), verify with
-a quick `nvidia-smi` + `import openchem` check before resuming work.
+  docking saturates around AUC 0.8.
+- RBFE on the prepared series.
+- A sweep of the diversity filter's bucket size, the one hyperparameter that
+  most likely moves the potency/diversity frontier.

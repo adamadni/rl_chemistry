@@ -220,7 +220,7 @@ only and have never executed successfully.**
 | `src/prep_rbfe.py`, `src/run_rbfe.py` | RBFE setup — **never successfully run** |
 | `results/` | All metrics, per-run histories, docking results |
 | `logs/` | Full training logs, every RL run |
-| `CLAUDE.md` | Detailed engineering log: every failure, diagnosis and fix |
+| `ENGINEERING_LOG.md` | Detailed engineering log: every failure, diagnosis and fix, in the order they happened |
 
 ## Compute
 

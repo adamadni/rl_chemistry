@@ -1,6 +1,6 @@
 """Compare an RL-finetuned policy against the pretrained prior.
 
-Samples N molecules from each and reports the metrics CLAUDE.md commits to
+Samples N molecules from each and reports the metrics ENGINEERING_LOG.md commits to
 (valid / unique / novel fractions, predicted-active fraction) plus the
 mode-collapse and applicability-domain diagnostics used during training.
 Scaffold diversity is the headline number here: the whole point of the

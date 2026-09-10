@@ -68,7 +68,7 @@ one dominant hill and PPO only governs the speed of the climb. The filter
 changes the surface (diversity_filter.py); replay keeps earlier, rarer
 chemotypes alive in the update so the policy is not re-paying their
 discovery cost every time the trust region moves (replay_buffer.py). Both
-default off; the CLAUDE.md v3 command line reproduces v3 unchanged.
+default off; the ENGINEERING_LOG.md v3 command line reproduces v3 unchanged.
 
 v5 adds the paper's first stabilizer, transfer learning on the generator's
 own high-reward output (`--transfer-learning`): every `--tl-every` steps the
@@ -402,7 +402,7 @@ def main():
                     help="0 = monotonic tau (v3). >0 lets tau ease down when the "
                          "diversity filter suppresses the region that set it.")
     # ---- diversity filter (component 2a) -- all default OFF so the v3
-    # ---- command line in CLAUDE.md still reproduces v3 exactly.
+    # ---- command line in ENGINEERING_LOG.md still reproduces v3 exactly.
     ap.add_argument("--diversity-filter", action="store_true")
     ap.add_argument("--df-bucket-size", type=int, default=25)
     ap.add_argument("--df-mode", choices=["generic", "murcko"], default="generic")

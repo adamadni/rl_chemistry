@@ -9,7 +9,7 @@ active class dominated by dasatinib-like chemistry, giving the RL reward
 model a scaffold-narrow target. Max aggregation is more outlier-sensitive
 (one noisy high-potency replicate can flip a label) but pulls chemically
 diverse known actives into the positive class, broadening what the reward
-model treats as "active" -- see CLAUDE.md decision #1.
+model treats as "active" -- see ENGINEERING_LOG.md decision #1.
 """
 import json, time, os
 from collections import defaultdict

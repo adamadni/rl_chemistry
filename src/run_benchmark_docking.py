@@ -40,7 +40,7 @@ def protonate(smiles, ph=7.4):
     every microstate within +/-1 pH unit -- typically 4-8 per molecule, with
     formal charges spanning -1/0/+1 -- and taking out[0] then picks an
     arbitrary one rather than the dominant form. The docking runs recorded in
-    CLAUDE.md up to 2026-08-30 used the buggy call, so their ligands were
+    ENGINEERING_LOG.md up to 2026-08-30 used the buggy call, so their ligands were
     protonated non-deterministically; spot checks (dasatinib -> [NH+],
     aspirin -> [O-]) happened to be right but were not guaranteed.
     """

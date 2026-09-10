@@ -7,3 +7,6 @@ checkpoints_backup/
 
 __pycache__/
 *.pyc
+
+# Machine-specific operational notes (pod access, account details)
+CLAUDE.local.md
